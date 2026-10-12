@@ -1,1 +1,0 @@
-import"./dist-BNtnpgX8.js";import"./dist-B8v7AWk6.js";import"./dist-BFifaB39.js";import"./dist-AWYmVWdt.js";import"./dist-Q2QzNScK.js";import{n as o,t as r}from"./dist-jH779Qc9.js";export{r as vue,o as vueLanguage};

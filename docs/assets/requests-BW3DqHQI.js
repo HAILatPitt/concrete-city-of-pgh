@@ -1,1 +1,0 @@
-import{o as s,r as n}from"./react-7g8sREeT.js";import{r as o,t as r}from"./invariant-B43sqCFA.js";const t=s(null);function i(){let e=n(t);return r(e,"useRequestClient() requires setting requestClientAtom."),e}function u(){let e=o.get(t);return r(e,"getRequestClient() requires requestClientAtom to be set."),e}export{t as n,i as r,u as t};
