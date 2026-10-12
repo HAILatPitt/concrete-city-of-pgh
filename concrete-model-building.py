@@ -131,8 +131,14 @@ def _(input_key, mo, set_intro_dialog_loaded):
 
 @app.cell(hide_code=True)
 def _(mo, pd):
+    import sys as _sys
     # load the data (a local path when run locally, a URL in the browser build)
     data_path = str(mo.notebook_location() / "public" / "data" / "all_extracted_data.csv")
+    if "pyodide" in _sys.modules:
+        # fetch the text ourselves: given the URL, pandas sees GitHub Pages' gzip header
+        # and tries to decompress text the browser already decompressed (BadGzipFile)
+        from pyodide.http import open_url
+        data_path = open_url(data_path)
     pgh_revenue_data = pd.read_csv(data_path)
 
     # create a new column that is the year and quarter combined
