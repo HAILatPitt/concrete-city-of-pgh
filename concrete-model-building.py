@@ -3,6 +3,139 @@ import marimo
 __generated_with = "0.18.0"
 app = marimo.App(width="medium", app_title="ConCReTE Model Building")
 
+with app.setup:
+    import asyncio
+    import functools
+    import html
+    import json
+    import sys
+
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    from sklearn.linear_model import LinearRegression
+    from sklearn.metrics import root_mean_squared_error
+    from sklearn.model_selection import train_test_split
+
+
+@app.function
+def revenue_columns(data) -> list[str]:
+    return [c for c in data.columns if c.lower().startswith("revenue by")]
+
+
+@app.function
+def quarter_label(year, quarter) -> str:
+    return f"{int(year)} {quarter}"
+
+
+@app.function
+def next_quarter_label(year, quarter) -> str:
+    number = int(str(quarter).lstrip("Q"))
+    return f"{int(year) + 1} Q1" if number == 4 else f"{int(year)} Q{number + 1}"
+
+
+@app.function
+def build_lagged(data, column: str, lag: int, drop_missing: bool):
+    frame = pd.DataFrame({
+        "quarter_label": [quarter_label(y, q) for y, q in zip(data["year"], data["quarter"])],
+        "revenue": data[column].astype(float),
+    })
+    frame["lag"] = frame["revenue"].shift(lag)
+    return frame.dropna(subset=["revenue", "lag"]).reset_index(drop=True) if drop_missing else frame
+
+
+@app.function
+def score_model(frame, train_share: float) -> dict:
+    if frame[["revenue", "lag"]].isna().any().any():
+        raise ValueError("The data still has missing values, so the model can't be trained.")
+    cut = int(len(frame) * train_share)
+    train, test = frame.iloc[:cut], frame.iloc[cut:]
+    if len(train) < 2 or len(test) < 1:
+        raise ValueError("The split leaves too few quarters to train or test on.")
+    model = LinearRegression().fit(train[["lag"]], train["revenue"])
+    predictions = model.predict(test[["lag"]])
+    return {
+        "rmse": root_mean_squared_error(test["revenue"], predictions),
+        "test_mean": test["revenue"].mean(),
+        "test_min": test["revenue"].min(),
+        "test_max": test["revenue"].max(),
+        "train_rows": len(train),
+        "test_rows": len(test),
+    }
+
+
+@app.function
+def forecast_inputs(data, column: str, lag: int) -> dict | None:
+    """The next quarter after the column's last value, and the quarter it is predicted from."""
+    last = data[column].last_valid_index()
+    if last is None:
+        return None
+    source = last + 1 - lag
+    return {
+        "label": next_quarter_label(data["year"][last], data["quarter"][last]),
+        "source_label": quarter_label(data["year"][source], data["quarter"][source]) if source >= 0 else None,
+        "source_value": data[column][source] if source >= 0 else None,
+    }
+
+
+@app.function
+def next_quarter_forecast(data, column: str, lag: int) -> dict | None:
+    inputs = forecast_inputs(data, column, lag)
+    if inputs is None or inputs["source_value"] is None or pd.isna(inputs["source_value"]):
+        return None
+    usable = build_lagged(data, column, lag, True)
+    if len(usable) < 2:
+        return None
+    model = LinearRegression().fit(usable[["lag"]], usable["revenue"])
+    value = float(model.predict(pd.DataFrame({"lag": [float(inputs["source_value"])]}))[0])
+    return {
+        "label": inputs["label"],
+        "value": value,
+        "reason": f"Predicted from {inputs['source_label']}, {lag} quarter(s) earlier, using every usable quarter.",
+    }
+
+
+@app.function
+def forecast_unavailable_reason(data, column: str, lag: int) -> str:
+    inputs = forecast_inputs(data, column, lag)
+    if inputs is None:
+        return "This column has no values at all."
+    if inputs["source_label"] is None:
+        return f"There is no quarter {lag} quarter(s) before {inputs['label']} to predict from."
+    return (f"To forecast {inputs['label']} with a lag of {lag}, the model needs {inputs['source_label']}, "
+            "which is missing in this column.")
+
+
+@app.function
+def random_split_rmse(data, column: str, lag: int) -> float:
+    frame = build_lagged(data, column, lag, True)
+    train, test = train_test_split(frame, test_size=0.2, random_state=0)
+    model = LinearRegression().fit(train[["lag"]], train["revenue"])
+    return root_mean_squared_error(test["revenue"], model.predict(test[["lag"]]))
+
+
+@app.function
+def chronological_rmse(data, column: str, lag: int, share: float) -> float:
+    return score_model(build_lagged(data, column, lag, True), share)["rmse"]
+
+
+@app.function
+def fooled_rows(data) -> list[dict]:
+    cases = [
+        ("Hand-typed column, lag 4, 80% training", chronological_rmse(data, "revenue by hand", 4, 0.8),
+         "A sensible model, tested on the most recent quarters."),
+        ("ChatGPT column, lag 2, 80% training", chronological_rmse(data, "revenue by chatgpt", 2, 0.8),
+         "The lowest error of any column, yet this column drops digits and misses whole years. Its errors sit in "
+         "the years the model learns from, and its test covers different quarters, so the score can't show them."),
+        ("Hand-typed column, lag 4, 10% training", chronological_rmse(data, "revenue by hand", 4, 0.1),
+         "The model learned from only 4 quarters. The low error is luck, not skill."),
+        ("Hand-typed column, lag 4, 90% training", chronological_rmse(data, "revenue by hand", 4, 0.9),
+         "Tested on only 5 quarters, so the score depends on which 5 happen to be at the end."),
+        ("Hand-typed column, lag 4, random split", random_split_rmse(data, "revenue by hand", 4),
+         "A random split lets the model learn from quarters after the ones it is tested on. It peeked at the future."),
+    ]
+    return [{"setting": s, "reported_rmse_m": round(v / 1e6, 1), "what_is_going_on": w} for s, v, w in cases]
+
+
 
 @app.cell
 async def _():
@@ -17,10 +150,7 @@ async def _():
 @app.cell
 def _():
     import marimo as mo
-    import pandas as pd
-    from sklearn.linear_model import LinearRegression
-    from sklearn.metrics import root_mean_squared_error
-    return LinearRegression, mo, pd, root_mean_squared_error
+    return (mo,)
 
 
 @app.cell
