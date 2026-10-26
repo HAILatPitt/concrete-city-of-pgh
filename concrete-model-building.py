@@ -5,6 +5,7 @@ app = marimo.App(width="compact", app_title="ConCReTE Model Building")
 
 with app.setup:
     import ast
+    import base64
     import asyncio
     import contextlib
     import io
@@ -335,14 +336,16 @@ with app.setup:
             "why": "Docling read 2018 Q4 as $6,425 (the other sources say $95.4 million) and 2021 Q4 as $608.6 "
                    "million (the others say $129.7 million). It is also missing every quarter of 2013, 2017 and 2024.",
             "cost": "Your model learned from a quarter where the city seemingly collected almost nothing, and from "
-                    "another four times its real size. The error figure can't show this, because those quarters fall "
-                    "in the years the model trains on, not the years it is tested on. A budget built on this forecast "
+                    "another four times its real size. Depending on the lag and split, those quarters either sit in "
+                    "the years the model trains on, where the error figure can't see them, or feed the quarters it is "
+                    "tested on, where they inflate the error without saying why. A budget built on this forecast "
                     "rests on numbers nobody checked.",
         },
         "revenue by chatgpt": {
-            "why": "ChatGPT misread three quarters of 2019 (for example $12.9 million where the reports say $122.2 million) "
+            "why": "ChatGPT misread all four quarters of 2019 (for example $12.9 million where the reports say $122.2 million) "
                    "and is missing every quarter of 2013, 2014, 2022 and 2024.",
-            "cost": "This column also gives the lowest error of all six, so it looks like the best choice. Chris would "
+            "cost": "At some lags and splits this column scores the lowest error of all six, so it can look like the "
+                    "best choice. Chris would "
                     "be told the forecast is more reliable than it is, and the city could plan spending around "
                     "revenue that was never there.",
         },
@@ -388,7 +391,8 @@ with app.setup:
         "plot": "Plotting every column shows spikes and drops no real budget has, and a pattern that repeats every "
                 "year: Q1 is by far the biggest quarter. That pattern is why a lag of 4, the same quarter last year, "
                 "works best.",
-        "truth": "On 2017 Q2 all five machine methods record $113,830,377, and only the hand-typed value differs "
+        "truth": "On 2017 Q2 every machine method that read 2017 records $113,830,377 (Docling skipped the year), "
+                 "and only the hand-typed value differs "
                  "($113,830,337). The person most likely made the typo. No source is automatically the truth.",
         "missing": "The blanks aren't random. Docling and ChatGPT miss whole years, so dropping missing rows quietly "
                    "removes years from the time series, and a year-ago comparison then lines up the wrong quarters.",
@@ -563,6 +567,8 @@ async def model_request(url: str, payload: dict | None = None) -> dict:
         return await asyncio.to_thread(urllib_request, url, payload)
     except ModelUnavailable:
         raise
+    except urllib.error.HTTPError as error:
+        raise ModelUnavailable(f"Your model server answered with an error (HTTP {error.code}).") from error
     except Exception as error:
         raise ModelUnavailable(
             f"Couldn't reach your model ({type(error).__name__}). Check that the SSH tunnel window is still open "
@@ -624,7 +630,7 @@ def card_html(card_id: str) -> str:
     card = CARDS[card_id]
     title = html.escape(card["title"], quote=False)
     front = (
-        "<div class='ss-card ss-front-face'><div class='ss-band'>Student Success</div>"
+        "<div class='ss-card ss-front-face'><div class='ss-band'>City of Pittsburgh</div>"
         f"<div class='ss-front-body'><div class='ss-numeral'>{card['numeral']}</div>"
         f"<div class='ss-front-title'>{title}</div><div class='ss-hair'></div></div>"
         "<div class='ss-band-b'>Click to open</div></div>"
@@ -695,11 +701,20 @@ def cell_namespace(data) -> dict:
 
 
 @app.function
+def figure_html(figure) -> str:
+    """Draw now, so a figure that can't be drawn fails inside run_cell's guard, not in the page."""
+    buffer = io.BytesIO()
+    figure.savefig(buffer, format="png", dpi=100, bbox_inches="tight")
+    encoded = base64.b64encode(buffer.getvalue()).decode()
+    return f"<img src='data:image/png;base64,{encoded}' style='max-width:100%' alt='Your plot'>"
+
+
+@app.function
 def run_cell(code: str, data) -> dict:
     """Run a student's cell on a fresh copy of the data; return stdout, last value, error and any figure."""
     namespace = cell_namespace(data)
     stdout = io.StringIO()
-    value, error = None, None
+    value, error, figure = None, None, None
     plt.close("all")
     try:
         tree = ast.parse(code)
@@ -708,14 +723,16 @@ def run_cell(code: str, data) -> dict:
             exec(compile(tree, "<cell>", "exec"), namespace)
             if last is not None:
                 value = eval(compile(ast.Expression(last.value), "<cell>", "eval"), namespace)
-    except Exception as exc:
+        if plt.get_fignums():
+            figure = figure_html(plt.gcf())
+    except (Exception, SystemExit) as exc:
         error = f"{type(exc).__name__}: {exc}"
     return {
         "stdout": stdout.getvalue(),
         "value": None if value is None else repr(value),
         "result": value,
         "error": error,
-        "figure": plt.gcf() if plt.get_fignums() else None,
+        "figure": figure,
     }
 
 
@@ -726,8 +743,9 @@ def explain_unlocked(prediction, runs: dict) -> bool:
 
 @app.function
 def cell_summary(key: str, cell: dict) -> str:
+    code = cell.get("code", "")[:2000]
     output = (cell.get("output") or "")[:2000]
-    return f"--- Cell {key} ---\nCode:\n{cell.get('code', '')}\nLast output:\n{output}"
+    return f"--- Cell {key} ---\nCode:\n{code}\nLast output:\n{output}"
 
 
 @app.function
@@ -735,6 +753,12 @@ def helper_system_prompt(data_csv: str, cells: dict, settings: dict) -> str:
     sections = "\n\n".join(cell_summary(key, cell) for key, cell in cells.items())
     chosen = ", ".join(f"{name}={value}" for name, value in settings.items()) or "none yet"
     return f"{HELPER_RULES}\n\nDATA (CSV):\n{data_csv}\n\nEXPLORATION CELLS:\n{sections}\n\nCURRENT SETTINGS: {chosen}"
+
+
+@app.function
+def helper_history(system: str, messages: list) -> list:
+    # The newest question and the four exchanges before it: older turns would overflow the model's context.
+    return [{"role": "system", "content": system}] + messages[-9:]
 
 
 @app.function
@@ -1156,7 +1180,7 @@ def observe_cells(cell_editors, cell_run_buttons, get_cells, get_outputs, get_pr
             if _result["result"] is not None:
                 _shown.append(_result["result"] if isinstance(_result["result"], (pd.DataFrame, pd.Series)) else mo.md(f"```\n{_result['value']}\n```"))
             if _result["figure"] is not None:
-                _shown.append(mo.as_html(_result["figure"]))
+                _shown.append(mo.Html(_result["figure"]))
             if _result["error"]:
                 _shown.append(mo.Html(f"<div class='ss ss-note'><strong>Error.</strong> {html.escape(_result['error'])}</div>"))
             if not _shown:
@@ -1258,7 +1282,7 @@ def helper_chat(helper_context, helper_log, mo):
         if not helper_context["base"]:
             return "Connect your model at the top of the page (**Test connection**) to use the helper."
         system = helper_system_prompt(helper_context["csv"], helper_context["cells"], helper_context["settings"])
-        history = [{"role": "system", "content": system}] + [{"role": m.role, "content": m.content} for m in messages]
+        history = helper_history(system, [{"role": m.role, "content": m.content} for m in messages])
         try:
             return await ask_model(helper_context["base"], history)
         except ModelUnavailable as error:
