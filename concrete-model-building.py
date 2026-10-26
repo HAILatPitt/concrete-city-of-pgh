@@ -30,12 +30,15 @@ with app.setup:
         - Be on **Wireless-PittNet** or connected to the **Pitt VPN**.
         - Use **Chrome, Edge or Firefox**.
 
-        **1. Log in to CRCD and start a GPU session.** In a terminal: `ssh <pittID>@h2p.crc.pitt.edu`, then:
+        You will use **two terminal windows on your laptop**. **Terminal A** logs in to CRCD and runs the model. **Terminal B** stays on your laptop and holds the tunnel that connects this page to the model.
+
+        **1. Terminal A: log in to CRCD and start a GPU session.** Open a terminal on your laptop (this is Terminal A) and log in with `ssh <pittID>@h2p.crc.pitt.edu`. Then start a GPU session:
         ```
         srun -M gpu -p l40s -n1 -c16 --gres=gpu:1 -t 2:00:00 --pty bash
         ```
+        When the prompt changes to something like `[pittID@gpu-n80 ~]$`, you are on a GPU machine. Type steps 2 and 3 here, in Terminal A.
 
-        **2. Choose the model and start the server.** Replace `<group>` with your CRCD group name:
+        **2. Terminal A: choose the model and start the server.** Replace `<group>` with your CRCD group name:
         ```
         export LLAMACPP_MODEL="bartowski/Qwen2.5-32B-Instruct-GGUF:Q4_K_M"
         export LLAMACPP_DOWNLOAD_DIR="/vast/<group>/$USER/llamacpp"
@@ -44,17 +47,22 @@ with app.setup:
         ```
         This is a 32-billion-parameter model compressed to about 20 GB. The first download takes a while; later sessions reuse the folder.
 
-        **3. Wait until it's ready.** Run `llamacpp-status` until it prints something like `READY - http://gpu-n80:27555`. The part after `http://` is your **node** (`gpu-n80`) and **port** (`27555`).
+        **3. Terminal A: wait until it's ready, then print your tunnel command.** Run `llamacpp-status` until it prints something like `READY - http://gpu-n80:27555` (your node and port will differ). Then run this, exactly as written:
+        ```
+        echo "ssh -N -L 8080:${LLAMACPP_BASE_URL#http://} $USER@h2p.crc.pitt.edu"
+        ```
+        It prints your own tunnel command, for example `ssh -N -L 8080:gpu-n80:27555 abc123@h2p.crc.pitt.edu`. Copy the whole printed line. If you type it yourself instead, the node name must include `gpu-`: `gpu-n80`, not `n80`.
 
-        **4. On your own laptop, open a tunnel.** In a *new* terminal window on your laptop (not on CRCD), using your node and port:
-        ```
-        ssh -N -L 8080:<node>:<port> <pittID>@h2p.crc.pitt.edu
-        ```
-        It will look like nothing happens. That's normal. Leave this window open the whole time you work.
+        **4. Terminal B: open the tunnel.** Open a *second* terminal window on your laptop (this is Terminal B). Do not log in to CRCD in it. Paste the line you copied and press Enter. After your Pitt password, it will look like nothing happens. That's normal. Leave Terminal B open the whole time you work.
 
         **5. Connect.** Keep the address below as `http://localhost:8080` and click **Test connection**. Your browser will ask whether this site may access other apps and devices on your network or computer. Click **Allow**. That lets this page talk to the tunnel.
 
-        **6. When you're finished,** type `exit` in the CRCD session. The GPU is billed for every minute you hold it, whether or not you're using it.
+        **6. When you're finished,** type `exit` in Terminal A and press Ctrl+C in Terminal B. The GPU is billed for every minute you hold it, whether or not you're using it.
+
+        **Test connection fails?** Look at Terminal B.
+        - `open failed: connect failed: Name or service not known`: the node name in your tunnel is wrong, most often a missing `gpu-`. Press Ctrl+C in Terminal B and paste the line from step 3 again.
+        - `open failed: connect failed: Connection refused`: the port is wrong or the server stopped. Run `llamacpp-status` in Terminal A; the port changes every time the server starts, so print the tunnel command again.
+        - Terminal B is back at a prompt: the tunnel closed. Paste the line from step 3 again.
 
         *Your model server has no password: other CRCD users could reach it while it runs, so stop it when you're done. This scenario only sends the city's public revenue data and your questions to it. Not working? You can also run this scenario on your laptop with `uv run marimo run concrete-model-building.py` (see the README).*
 
@@ -571,8 +579,9 @@ async def model_request(url: str, payload: dict | None = None) -> dict:
         raise ModelUnavailable(f"Your model server answered with an error (HTTP {error.code}).") from error
     except Exception as error:
         raise ModelUnavailable(
-            f"Couldn't reach your model ({type(error).__name__}). Check that the SSH tunnel window is still open "
-            "and that the server shows READY."
+            f"Couldn't reach your model ({type(error).__name__}). Look at your tunnel window (Terminal B): if it "
+            "says open failed, the node name or port in the tunnel command is wrong, so copy it again from step 3. "
+            "Otherwise check that Terminal B is still open and that llamacpp-status shows READY."
         ) from error
 
 

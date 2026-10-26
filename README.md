@@ -17,11 +17,14 @@ It takes a few seconds to load.
 
 The helper uses an open-weight model (Qwen2.5-32B-Instruct, 4-bit) that each student starts on CRCD with llama.cpp. The notebook shows every step at the top. In short:
 
+You use two terminal windows on your laptop: **Terminal A** logs in to CRCD and runs the model, **Terminal B** holds the tunnel.
+
 1. You need a CRCD account with an allocation on the `gpu` cluster, and Wireless-PittNet or the Pitt VPN.
-2. On `h2p.crc.pitt.edu`, start a GPU session: `srun -M gpu -p l40s -n1 -c16 --gres=gpu:1 -t 2:00:00 --pty bash`
-3. Set `LLAMACPP_MODEL="bartowski/Qwen2.5-32B-Instruct-GGUF:Q4_K_M"`, `LLAMACPP_DOWNLOAD_DIR="/vast/<group>/$USER/llamacpp"` and `LLAMACPP_EXTRA_ARGS="-c 16384"`, then `module load llamacpp/0.5.0`. Wait for `llamacpp-status` to print `READY`.
-4. On your laptop, open a tunnel to the node and port it printed: `ssh -N -L 8080:<node>:<port> <pittID>@h2p.crc.pitt.edu`
-5. In the notebook, keep `http://localhost:8080`, click **Test connection**, and allow the browser's local-network prompt.
+2. **Terminal A:** `ssh <pittID>@h2p.crc.pitt.edu`, then start a GPU session: `srun -M gpu -p l40s -n1 -c16 --gres=gpu:1 -t 2:00:00 --pty bash`. The prompt changes to a node such as `gpu-n80`; steps 3 and 4 run there.
+3. **Terminal A:** set `LLAMACPP_MODEL="bartowski/Qwen2.5-32B-Instruct-GGUF:Q4_K_M"`, `LLAMACPP_DOWNLOAD_DIR="/vast/<group>/$USER/llamacpp"` and `LLAMACPP_EXTRA_ARGS="-c 16384"`, then `module load llamacpp/0.5.0`. Wait for `llamacpp-status` to print `READY`.
+4. **Terminal A:** print your tunnel command with `echo "ssh -N -L 8080:${LLAMACPP_BASE_URL#http://} $USER@h2p.crc.pitt.edu"` and copy the line it prints. Typing it yourself? The node name includes `gpu-` (`gpu-n80`, not `n80`).
+5. **Terminal B** (on your laptop, not logged in to CRCD): paste that line and leave the window open.
+6. In the notebook, keep `http://localhost:8080`, click **Test connection**, and allow the browser's local-network prompt.
 
 CRC's guides: [llama.cpp](https://crc-pages.pitt.edu/user-manual/applications/ai-ml/llamacpp/) · [Inference servers on the GPU cluster](https://crc-pages.pitt.edu/user-manual/applications/ai-ml/inference-server/)
 
