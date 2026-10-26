@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.0"
-app = marimo.App(width="medium", app_title="ConCReTE Model Building")
+app = marimo.App(width="compact", app_title="ConCReTE Model Building")
 
 with app.setup:
     import asyncio
@@ -56,6 +56,193 @@ with app.setup:
 
         Sources: CRC [llama.cpp guide](https://crc-pages.pitt.edu/user-manual/applications/ai-ml/llamacpp/) · CRC [Inference servers on the GPU cluster](https://crc-pages.pitt.edu/user-manual/applications/ai-ml/inference-server/)
     """)
+
+    FONT_LINK = (
+        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Libre+Franklin:"
+        "wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap'>"
+    )
+    # Pitt navy is the case's ink; Pitt gold marks what the learner adds. Cool hue-260 neutrals.
+    PALETTE = (
+        ".ss{--gold:#FFB81C;--navy:#003594;--navy-dk:#003163;--ink:oklch(0.24 0.012 260);"
+        "--mid:oklch(0.47 0.010 260);--rule:oklch(0.86 0.006 260);--wash:oklch(0.975 0.004 260);"
+        "--sans:'Libre Franklin','PT Sans',sans-serif;--serif:'Lora',Georgia,serif;"
+        "color:var(--ink);font-family:var(--sans)}"
+    )
+    # Card faces render inside the marimo button's shadow root, so they carry their own styles.
+    CARD_STYLE = (
+        ".ss-card{box-sizing:border-box;width:224px;height:300px;overflow:hidden;background:#fff;"
+        "border:1px solid var(--rule);border-radius:2px;display:flex;flex-direction:column;text-align:left;"
+        "white-space:normal;font-weight:400;box-shadow:0 1px 0 var(--rule),0 8px 18px -14px rgba(0,49,99,.35);"
+        "animation:ss-flip .4s cubic-bezier(.2,.7,.3,1) both}"
+        ".ss-card:hover{border-color:var(--gold)}"
+        ".ss-front-face{display:var(--ss-front,flex)}.ss-back-face{display:var(--ss-back,none)}"
+        "@keyframes ss-flip{from{transform:rotateY(90deg);opacity:.4}to{transform:rotateY(0);opacity:1}}"
+        ".ss-band,.ss-band-b{display:flex;align-items:center;justify-content:center;"
+        "font:600 12px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase}"
+        ".ss-band{height:54px;background:var(--navy);color:#fff}"
+        ".ss-band-b{height:40px;margin-top:auto;background:var(--gold);color:var(--navy-dk)}"
+        ".ss-front-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;"
+        "text-align:center;padding:0 20px}"
+        ".ss-numeral{font:italic 400 22px/1 var(--serif);color:var(--navy)}"
+        ".ss-front-title{font:500 24px/1.15 var(--serif);color:var(--ink);margin-top:10px}"
+        ".ss-hair{width:28px;height:2px;background:var(--gold);margin:14px auto 0}"
+        ".ss-back{padding:18px 18px 14px}"
+        ".ss-back-head{display:flex;align-items:baseline;justify-content:space-between;"
+        "border-bottom:2px solid var(--navy);padding-bottom:7px}"
+        ".ss-back-head b{font:500 16px/1.1 var(--serif);color:var(--ink)}"
+        ".ss-back-head i{font:italic 400 15px/1 var(--serif);color:var(--navy)}"
+        ".ss-back-text{display:block;font:400 13px/1.45 var(--sans);color:var(--ink);margin:9px 0 0;hyphens:auto}"
+        ".ss-back-text::first-letter{font:500 30px/.8 var(--serif);float:left;color:var(--navy);margin:3px 4px 0 0}"
+    )
+    # marimo's button is a fixed-height inline-flex; centring it in a card-height flex slot lets the
+    # card overflow it symmetrically and sit in normal flow. The card's -9px margin covers the button's
+    # 7.2px side padding and 1px border. ponytail: tied to marimo 0.17.7's button box; re-check on upgrade.
+    CARD_SLOT = {"display": "flex", "align-items": "center", "justify-content": "center", "height": "300px"}
+    # Page-level blocks (light DOM), injected once by the title cell.
+    BRIEF_STYLE = (
+        ".ss-kicker{font:600 12px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--navy)}"
+        ".ss-title{font:500 42px/1.1 var(--serif);letter-spacing:-.01em;margin:10px 0 30px;color:var(--ink)}"
+        ".ss-gate{margin:18px 0 0;text-align:center;font:italic 400 15px/1.4 var(--serif);color:var(--mid)}"
+        ".ss-gate::before,.ss-gate::after{content:'';display:inline-block;width:36px;height:1px;"
+        "background:var(--rule);vertical-align:middle;margin:0 12px}"
+        ".ss-stage{margin-top:40px}"
+        ".ss-runhead{display:flex;justify-content:space-between;font:600 12px/1 var(--sans);letter-spacing:.14em;"
+        "text-transform:uppercase;color:var(--mid);border-top:2px solid var(--navy-dk);padding-top:9px}"
+        ".ss-runhead span:first-child{color:var(--navy)}"
+        ".ss-stage-title{font:500 34px/1.1 var(--serif);margin:18px 0 0;padding:0;border:0;color:var(--ink)}"
+        ".ss-stage-title em{font-style:italic;color:var(--navy)}"
+        ".ss-steps{display:flex;gap:18px;margin-top:12px;font:400 13px/1 var(--sans);color:var(--mid)}"
+        ".ss-step.now{color:var(--ink);font-weight:600;border-bottom:2px solid var(--gold);padding-bottom:3px}"
+        ".ss-prompt{margin-top:22px;background:var(--wash);border-top:1px solid var(--rule);"
+        "border-bottom:1px solid var(--rule);padding:18px 22px;font:400 16px/1.6 var(--serif);color:var(--ink)}"
+        ".ss-prompt .n{font-style:italic;color:var(--navy)}"
+        ".ss-prompt strong{font-weight:600}"
+        ".ss-prompt ul,.ss-prompt ol{margin:10px 0 12px 22px;padding:0;list-style:disc}"
+        ".ss-prompt li{margin:5px 0;padding-left:2px}"
+        ".ss-label{display:grid;grid-template-columns:34px 1fr;align-items:baseline;margin:22px 0 8px}"
+        ".ss-label i{font:italic 400 20px/1 var(--serif);color:var(--navy)}"
+        ".ss-label span{font:600 14px/1.35 var(--sans);color:var(--ink)}"
+        ".ss-indent{padding-left:34px}"
+        ".ss-locked{margin-top:22px;background:var(--wash);border-top:2px solid var(--navy-dk);"
+        "border-bottom:1px solid var(--rule);padding:14px 22px 18px}"
+        ".ss-locked-head{font:600 12px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--navy)}"
+        ".ss-locked h4{font:italic 500 16px/1.3 var(--serif);color:var(--ink);margin:14px 0 4px}"
+        ".ss-locked p{font:400 15px/1.55 var(--sans);margin:0}"
+        ".ss-task-title{font:500 24px/1.2 var(--serif);color:var(--ink);margin:34px 0 12px;padding:0;border:0}"
+        ".ss-brief{background:var(--wash);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);"
+        "padding:16px 22px 18px;font:400 14px/1.6 var(--sans);color:var(--ink)}"
+        ".ss-brief p{margin:0 0 10px}"
+        ".ss-brief table{width:100%;border-collapse:collapse;margin:6px 0 0;font-size:13.5px}"
+        ".ss-brief th,.ss-brief td{text-align:left;vertical-align:top;padding:7px 10px 7px 0;"
+        "border-bottom:1px solid var(--rule)}"
+        ".ss-brief th{font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--navy);"
+        "border-bottom:2px solid var(--navy)}"
+        ".ss-brief td:first-child{white-space:nowrap;padding-right:18px}"
+        ".ss-note{margin:16px 0 0;background:#fff8e6;border-top:2px solid var(--gold);padding:12px 18px;"
+        "font:400 14px/1.55 var(--sans);color:var(--ink)}"
+        ".ss-note.ok{background:#ecfdf5;border-top-color:#15803d}"
+        ".ss-sheet{width:100%;border-collapse:collapse;font:400 13.5px/1.45 var(--sans);color:var(--ink)}"
+        ".ss-sheet th{text-align:left;font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;"
+        "color:var(--navy);border-bottom:2px solid var(--navy);padding:8px 10px 8px 0}"
+        ".ss-sheet td{text-align:left;vertical-align:top;padding:7px 10px 7px 0;border-bottom:1px solid var(--rule)}"
+        ".ss-sheet .grp td{font:600 12px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--mid);"
+        "padding-top:18px;border-bottom:1px solid var(--navy-dk)}"
+        ".ss-sheet .inc td{background:#ecfdf5}"
+        ".ss-sheet .muted{color:var(--mid);font-style:italic}"
+    )
+    STAGES = ("Predict", "Observe", "Explain", "Evaluate")
+    BRIEF_NAME = "Revenue Forecast Brief"
+    EVAL_STYLE = (
+        "<style>.poee-eval .sum{background:var(--wash);border-top:2px solid var(--navy-dk);"
+        "border-bottom:1px solid var(--rule);padding:16px 22px;margin:14px 0}"
+        ".poee-eval .big{font:500 22px/1.3 var(--serif);color:var(--ink)}"
+        ".poee-eval .bar{display:flex;height:8px;overflow:hidden;margin:12px 0}"
+        ".poee-eval .legend,.poee-eval .chips{font:400 12.5px/1.6 var(--sans);color:var(--mid);margin-top:6px}"
+        ".poee-eval .chip{display:inline-block;background:#fff;border:1px solid var(--rule);padding:1px 8px;margin:2px;"
+        "color:var(--ink)}"
+        ".poee-eval .ev{background:#fff;border:1px solid var(--rule);border-top:3px solid #d97706;padding:16px 20px;margin:14px 0}"
+        ".poee-eval .ev.harm{border-top-color:#b91c1c}"
+        ".poee-eval h3{font:500 19px/1.25 var(--serif);color:var(--ink);margin:0 0 12px;padding:0;border:0}"
+        ".poee-eval .trail{display:flex;gap:8px;margin-bottom:10px}"
+        ".poee-eval .trail div{flex:1;padding:8px 10px;font:400 13px/1.4 var(--sans);background:var(--wash)}"
+        ".poee-eval .trail .ok{background:#ecfdf5}"
+        ".poee-eval .k{display:block;font:600 10.5px/1.4 var(--sans);text-transform:uppercase;letter-spacing:.1em;"
+        "color:var(--mid)}"
+        ".poee-eval .also{font-size:11.5px;color:var(--mid)}"
+        ".poee-eval .key{display:inline-block;width:10px;height:10px;margin:0 6px -1px 0}"
+        ".poee-eval .why,.poee-eval .cost{font:400 14px/1.6 var(--sans);color:var(--ink);margin:8px 0}"
+        ".poee-eval .cost{background:#fdf3f2;padding:10px 12px}"
+        ".poee-eval .grp{margin:26px 0 4px;font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.14em;"
+        "color:var(--navy)}</style>"
+    )
+
+    CARDS = {
+        "story": {
+            "numeral": "i",
+            "title": "The story so far",
+            "back": (
+                "Pittsburgh's data office wants a forecast of the city's quarterly revenue. The numbers live in years "
+                "of PDF revenue reports, and the team has already pulled them out six different ways: by hand, "
+                "with software, and with AI."
+            ),
+            "full": (
+                "The City of Pittsburgh is implementing a three-year data strategy under the leadership of Chris "
+                "Belasco, Senior Manager of Digital Services and Chief Data Officer. This strategy positions data as "
+                "a critical asset to enhance city operations, engage the community, and drive equity. Participants "
+                "are tasked with analyzing and forecasting the city's revenue, which is critical for supporting "
+                "Pittsburgh's long-term goals. Before this scenario, Chris's team identified a need to forecast the "
+                "city's revenue, found the Q4 Revenue Summary Table in each Revenue Report PDF, and extracted the "
+                "actual quarterly revenue totals six ways: manual extraction by a human, Docling, one-shot AI "
+                "chatbots (ChatGPT and Claude), the Claude API, and pypdf."
+            ),
+        },
+        "role": {
+            "numeral": "ii",
+            "title": "Your role",
+            "back": (
+                "You're an intern for Chris Belasco, the city's Chief Data Officer. You decide which extracted "
+                "numbers to trust, then build a simple forecast from them."
+            ),
+            "full": (
+                "You are an intern working for Chris, and he has asked you to help with this next stage of the "
+                "project. You have a dataset of the city's quarterly revenue from 2012 to 2024, with one column for "
+                "each of the six extraction methods."
+            ),
+        },
+        "deliver": {
+            "numeral": "iii",
+            "title": "What you deliver",
+            "back": (
+                "A forecast of the city's revenue for the next quarter, and a short note to Chris saying how "
+                "confident he should be in it, and why."
+            ),
+            "full": (
+                "Use the historical quarterly revenue data to build a predictive model for the city's revenue. "
+                "Beyond an accurate model, consider what the most appropriate way to extract the data is, and be "
+                "ready to explain to Chris how much to trust the result."
+            ),
+        },
+    }
+
+    METHOD_LABELS = {
+        "revenue by hand": "By hand (a person typed them in)",
+        "revenue by docling": "Docling (document-parsing software)",
+        "revenue by chatgpt": "ChatGPT (one-shot AI chat)",
+        "revenue by claude chat": "Claude chat (one-shot AI chat)",
+        "revenue by claude api": "Claude API (automated AI pipeline)",
+        "revenue by pypdf": "pypdf (a PDF text-extraction script)",
+        "none": "None of them",
+    }
+
+    PREDICT_GUIDING = [
+        "What previous decisions might have been made that impact your work here? Would your answer change if "
+        "your role was different?",
+        "Before selecting from one of the 6 options below, consider each option carefully. Do any of them raise "
+        "technical or ethical concerns?",
+        "What could go wrong when software or AI reads numbers from a PDF table? Which mistakes would be hardest "
+        "to notice?",
+        "Would you trust a person typing the numbers by hand more? What mistakes do people make?",
+    ]
 
     class ModelUnavailable(Exception):
         """The student's model server could not be reached or gave an unusable reply."""
@@ -248,9 +435,109 @@ async def ask_model(base: str, messages: list[dict]) -> str:
         raise ModelUnavailable("The model answered in an unexpected format.") from error
 
 
-@app.cell
+@app.function
+def with_entry(mapping: dict, name: str, value) -> dict:
+    return {**mapping, name: value}
+
+
+@app.function
+def record_field(setter, key: str, text: str) -> None:
+    setter(lambda fields: with_entry(fields, key, text))
+
+
+@app.function
+def cards_ready(opened: frozenset) -> bool:
+    return set(CARDS) <= set(opened)
+
+
+@app.function
+def toggled(items: frozenset, item: str) -> frozenset:
+    return frozenset(items ^ {item})
+
+
+@app.function
+def added(items: frozenset, item: str) -> frozenset:
+    return frozenset(items | {item})
+
+
+@app.function
+def record_flip(set_flipped, set_opened, card_id: str, _value=None) -> None:
+    set_flipped(lambda flipped: toggled(flipped, card_id))
+    set_opened(lambda opened: added(opened, card_id))
+
+
+@app.function
+def card_html(card_id: str) -> str:
+    card = CARDS[card_id]
+    title = html.escape(card["title"], quote=False)
+    front = (
+        "<div class='ss-card ss-front-face'><div class='ss-band'>Student Success</div>"
+        f"<div class='ss-front-body'><div class='ss-numeral'>{card['numeral']}</div>"
+        f"<div class='ss-front-title'>{title}</div><div class='ss-hair'></div></div>"
+        "<div class='ss-band-b'>Click to open</div></div>"
+    )
+    back = (
+        f"<div class='ss-card ss-back ss-back-face'><div class='ss-back-head'><b>{title}</b><i>{card['numeral']}</i></div>"
+        f"<div class='ss-back-text'>{html.escape(card['back'], quote=False)}</div></div>"
+    )
+    return f"<style>{PALETTE}{CARD_STYLE}</style><div class='ss' style='margin:0 -9px'>{front}{back}</div>"
+
+
+@app.function
+def card_slot_style(flipped: bool) -> dict:
+    # The face is chosen by custom properties, which inherit into the button's shadow root.
+    return {**CARD_SLOT, "--ss-front": "none" if flipped else "flex", "--ss-back": "none" if not flipped else "block"}
+
+
+@app.function
+def bold_html(text: str) -> str:
+    parts = html.escape(text, quote=False).split("**")
+    return "".join(f"<strong>{part}</strong>" if i % 2 else part for i, part in enumerate(parts))
+
+
+@app.function
+def stage_header_html(stage: int) -> str:
+    steps = "".join(
+        f'<span class="ss-step now">{name}</span>' if i == stage else f'<span class="ss-step">{name}</span>'
+        for i, name in enumerate(STAGES, 1)
+    )
+    return (
+        f'<div class="ss ss-stage"><div class="ss-runhead"><span>{BRIEF_NAME}</span>'
+        f"<span>Stage {stage} of 4</span></div>"
+        f'<h2 class="ss-stage-title"><em>Stage {stage}</em> · {STAGES[stage - 1]}</h2>'
+        f'<div class="ss-steps">{steps}</div></div>'
+    )
+
+
+@app.function
+def paragraph_html(text: str) -> str:
+    return html.escape(text.strip()).replace("\n", "<br>") if text.strip() else "<i>(left blank)</i>"
+
+
+@app.function
+def prediction_ready(method: str | None, why: str, accuracy: str) -> bool:
+    return bool(method) and bool(why.strip()) and bool(accuracy.strip())
+
+
+@app.function
+def locked_prediction_html(prediction: dict) -> str:
+    return (
+        '<div class="ss ss-locked"><div class="ss-locked-head">Your locked prediction</div>'
+        f"<h4>The method I would trust</h4><p>{html.escape(METHOD_LABELS.get(prediction['method'], prediction['method']))}</p>"
+        f"<h4>Why</h4><p>{paragraph_html(prediction['why'])}</p>"
+        f"<h4>How accurate I expect the forecast to be</h4><p>{paragraph_html(prediction['accuracy'])}</p></div>"
+    )
+
+
+@app.cell(hide_code=True)
 def _():
     import marimo as mo
+
+    mo.Html(
+        f"{FONT_LINK}<style>{PALETTE}{BRIEF_STYLE}</style>"
+        "<div class='ss'><div class='ss-kicker'>ConCReTE · City of Pittsburgh</div>"
+        "<h1 class='ss-title'>Forecasting the city's revenue</h1></div>"
+    )
     return (mo,)
 
 
@@ -292,16 +579,128 @@ async def test_connection(model_url, set_model_base, set_model_status, test_butt
 def connect_panel(get_model_status, mo, model_url, test_button):
     _state, _detail = get_model_status()
     _note = {
-        "ok": mo.md(f"**Connected:** `{_detail}`. The AI helper is ready.").callout("success"),
-        "error": mo.md(f"**Not connected.** {_detail}").callout("warn"),
+        "ok": mo.Html(f"<div class='ss ss-note ok'><strong>Connected:</strong> {html.escape(_detail)}. "
+                      "The AI helper is ready.</div>"),
+        "error": mo.Html(f"<div class='ss ss-note'><strong>Not connected.</strong> {html.escape(_detail)}</div>"),
     }.get(_state, "")
     mo.vstack([
-        mo.md("## Before you start: connect your AI model"),
-        mo.md(CRCD_STEPS),
+        mo.Html("<h3 class='ss ss-task-title'>Before you start: connect your AI model</h3>"),
+        mo.Html(f"<div class='ss ss-brief'>{mo.md(CRCD_STEPS).text}</div>"),
         model_url,
         test_button,
         _note,
     ])
+    return
+
+
+@app.cell
+def card_states(mo):
+    get_flipped, set_flipped = mo.state(frozenset())
+    get_opened, set_opened = mo.state(frozenset())
+    get_prediction, set_prediction = mo.state(None)
+    get_predict_draft, set_predict_draft = mo.state({"why": "", "accuracy": ""})
+    return (
+        get_flipped,
+        get_opened,
+        get_predict_draft,
+        get_prediction,
+        set_flipped,
+        set_opened,
+        set_predict_draft,
+        set_prediction,
+    )
+
+
+@app.cell(hide_code=True)
+def card_buttons(mo, set_flipped, set_opened):
+    # Built once, both faces in the label; flip_cards picks the face, so a button is never recreated.
+    story_card, role_card, deliver_card = (
+        mo.ui.run_button(
+            label=card_html(card_id),
+            on_change=functools.partial(record_flip, set_flipped, set_opened, card_id),
+        )
+        for card_id in ("story", "role", "deliver")
+    )
+    return deliver_card, role_card, story_card
+
+
+@app.cell(hide_code=True)
+def flip_cards(deliver_card, get_flipped, get_opened, mo, role_card, story_card):
+    _slots = [
+        card.style(card_slot_style(card_id in get_flipped()))
+        for card_id, card in (("story", story_card), ("role", role_card), ("deliver", deliver_card))
+    ]
+    _gate = "" if cards_ready(get_opened()) else mo.Html("<p class='ss ss-gate'>Open all three cards to begin.</p>")
+    mo.vstack([mo.hstack(_slots, justify="space-between", wrap=True, gap=1), _gate])
+    return
+
+
+@app.cell
+def predict_inputs(mo, set_predict_draft):
+    method_choice = mo.ui.radio(options={label: key for key, label in METHOD_LABELS.items()}, value=None)
+    # Plain dict: the predict cell must not re-run while the learner types.
+    predict_fields = {
+        key: mo.ui.text_area(rows=4, full_width=True, on_change=functools.partial(record_field, set_predict_draft, key))
+        for key in ("why", "accuracy")
+    }
+    lock_button = mo.ui.run_button(label="Lock my prediction", kind="success")
+    return lock_button, method_choice, predict_fields
+
+
+@app.cell
+def lock_prediction(get_predict_draft, lock_button, method_choice, mo, set_prediction):
+    _draft = get_predict_draft()
+    _ready = prediction_ready(method_choice.value, _draft["why"], _draft["accuracy"])
+    if lock_button.value and _ready:
+        set_prediction({"method": method_choice.value, "why": _draft["why"].strip(), "accuracy": _draft["accuracy"].strip()})
+    lock_warning = (
+        mo.Html("<div class='ss ss-note'>Choose a method and answer both questions before you lock.</div>")
+        if lock_button.value and not _ready
+        else ""
+    )
+    return (lock_warning,)
+
+
+@app.cell(hide_code=True)
+def predict(get_opened, get_prediction, lock_button, lock_warning, method_choice, mo, predict_fields):
+    mo.stop(not cards_ready(get_opened()))
+    _guiding = "".join(f"<li>{html.escape(q)}</li>" for q in PREDICT_GUIDING)
+    _header = [
+        mo.Html(stage_header_html(1)),
+        mo.Html(
+            "<div class='ss ss-prompt'>Before you see the data, form your own view. Think through these questions "
+            f"first. Nobody will grade your answers to them:<ul>{_guiding}</ul>Then commit to a position below. "
+            "<strong>Once you lock your prediction it cannot be changed.</strong> You will come back to it at the "
+            "end.</div>"
+        ),
+    ]
+    if get_prediction() is None:
+        _output = mo.vstack(_header + [
+            mo.Html(
+                "<div class='ss'><div class='ss-label'><i>1</i><span>Which extraction method would you trust "
+                f"to build the city's forecast?</span></div><div class='ss-indent'>{method_choice}</div>"
+                "<div class='ss-label'><i>2</i><span>Why? What makes it more trustworthy than the others?</span>"
+                f"</div><div class='ss-indent'>{predict_fields['why']}</div>"
+                "<div class='ss-label'><i>3</i><span>How accurate do you expect a simple forecast of city revenue "
+                f"to be, and why?</span></div><div class='ss-indent'>{predict_fields['accuracy']}</div>"
+                f"<div class='ss-indent' style='margin-top:22px'>{lock_button}</div></div>"
+            ),
+            lock_warning,
+        ])
+    else:
+        _output = mo.vstack(_header + [mo.Html(locked_prediction_html(get_prediction()))])
+    _output
+    return
+
+
+@app.cell(hide_code=True)
+def briefing(get_prediction, mo):
+    mo.stop(get_prediction() is None)
+    mo.accordion({
+        "Read the full briefing": mo.md(
+            "\n\n".join(f"### {card['title']}\n\n{card['full']}" for card in CARDS.values())
+        )
+    })
     return
 
 
