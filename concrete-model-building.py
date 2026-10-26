@@ -24,7 +24,7 @@ with app.setup:
     from sklearn.model_selection import train_test_split
 
     CRCD_STEPS = textwrap.dedent("""
-        **This scenario includes an AI helper that runs on your own model on Pitt's CRCD GPU cluster.** Setting it up takes about 15 minutes the first time (mostly the one-time model download) and about 3 minutes after that. You can do the whole data task without it; only the helper needs it.
+        **This scenario includes an AI helper that runs on your own model on Pitt's CRCD GPU cluster.** Setting it up takes about 15 minutes the first time, mostly for the one-time model download, and about 3 minutes after that. You can do the whole data task without it.
 
         **Before you begin**
         - A CRCD account with an allocation on the `gpu` cluster. No allocation yet? Request one at [crc.pitt.edu/service-request-forms](https://crc.pitt.edu/service-request-forms).
@@ -106,9 +106,9 @@ with app.setup:
         "background:linear-gradient(var(--ink),var(--ink)) center/9px 1.5px no-repeat,"
         "linear-gradient(var(--ink),var(--ink)) center/1.5px var(--ss-plus,9px) no-repeat}"
         ".ss-ex-full{grid-column:2 / 4;display:var(--ss-full,none);margin-top:18px;padding-top:18px;"
-        "border-top:1px solid var(--rule);columns:2;column-gap:36px;font:400 16px/1.6 var(--serif);color:var(--ink)}"
+        "border-top:1px solid var(--rule);max-width:760px;font:400 17px/1.6 var(--serif);color:var(--ink)}"
         "@media (max-width:700px){.ss-ex-card{grid-template-columns:36px 1fr;padding:18px}"
-        ".ss-ex-cue{grid-column:2;justify-self:start;margin-top:12px}.ss-ex-full{grid-column:1 / 3;columns:1}}"
+        ".ss-ex-cue{grid-column:2;justify-self:start;margin-top:12px}.ss-ex-full{grid-column:1 / 3}}"
     )
     # Page-level blocks (light DOM), injected once by the title cell and again in the downloaded brief.
     BRIEF_STYLE = (
@@ -116,8 +116,6 @@ with app.setup:
         ".ss-lab.cr{color:var(--crimson)}"
         ".ss-swy{display:flex;align-items:center;gap:8px}"
         ".ss-swy::before{content:'';width:22px;height:4px;background:var(--pink)}"
-        ".ss-mast{display:flex;justify-content:space-between;align-items:baseline;gap:24px;"
-        "border-bottom:1px solid var(--rule);padding-bottom:12px;margin-bottom:44px}"
         ".ss-hero{display:grid;grid-template-columns:1fr 300px;column-gap:56px;align-items:end;margin-bottom:28px}"
         ".ss-kicker{display:flex;align-items:center;gap:10px;font:600 15px/1 var(--sans);color:var(--crimson);"
         "margin:0 0 18px}"
@@ -189,13 +187,12 @@ with app.setup:
         ".ss-big span{background:linear-gradient(transparent 62%,var(--pink-lt) 62%)}"
         ".ss-result p:not(.ss-lab):not(.ss-big){font:400 16px/1.55 var(--sans);color:var(--ink);margin:0 0 6px}"
         ".ss-result .ss-meta{color:var(--tan)}"
-        "@media (max-width:700px){.ss-mast p:last-child{display:none}.ss-hero{grid-template-columns:1fr;row-gap:24px}"
+        "@media (max-width:700px){.ss-hero{grid-template-columns:1fr;row-gap:24px}"
         ".ss-title{font-size:44px}.ss-stage-title{font-size:40px}.ss-prompt ul{grid-template-columns:1fr}"
         ".ss-result{grid-template-columns:1fr}.ss-result > div + div{border-left:0;border-top:1px solid var(--rule);"
         "padding-left:0}.ss-big{font-size:40px}}"
     )
     STAGES = ("Predict", "Observe", "Explain", "Evaluate")
-    BRIEF_NAME = "Revenue Forecast Brief"
     EVAL_STYLE = (
         "<style>.poee-eval .grp{font:600 13px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;"
         "color:var(--crimson);margin:48px 0 14px}"
@@ -247,59 +244,46 @@ with app.setup:
             "numeral": "i",
             "title": "The story so far",
             "back": (
-                "Pittsburgh's data office wants a forecast of the city's quarterly revenue. The numbers live in years "
-                "of PDF revenue reports, and the team has already pulled them out six different ways: by hand, "
-                "with software, and with AI."
+                "Pittsburgh's data office wants to forecast the city's revenue for each quarter. The figures sit in "
+                "years of PDF revenue reports, and the team has already copied them out six different ways."
             ),
             "full": (
-                "The City of Pittsburgh is implementing a three-year data strategy under the leadership of Chris "
-                "Belasco, Senior Manager of Digital Services and Chief Data Officer. This strategy positions data as "
-                "a critical asset to enhance city operations, engage the community, and drive equity. Participants "
-                "are tasked with analyzing and forecasting the city's revenue, which is critical for supporting "
-                "Pittsburgh's long-term goals. Before this scenario, Chris's team identified a need to forecast the "
-                "city's revenue, found the Q4 Revenue Summary Table in each Revenue Report PDF, and extracted the "
-                "actual quarterly revenue totals six ways: manual extraction by a human, Docling, one-shot AI "
-                "chatbots (ChatGPT and Claude), the Claude API, and pypdf."
+                "This is part of the city's three-year data strategy, led by Chris Belasco, Senior Manager of Digital "
+                "Services and Chief Data Officer. The strategy uses data to improve city services, involve residents "
+                "and promote equity. For this task his team took the Q4 Revenue Summary Table from each Revenue "
+                "Report PDF. One person typed the totals in by hand, and five tools read them automatically: Docling, "
+                "ChatGPT, Claude chat, the Claude API and pypdf."
             ),
         },
         "role": {
             "numeral": "ii",
             "title": "Your role",
-            "back": (
-                "You're an intern for Chris Belasco, the city's Chief Data Officer. You decide which extracted "
-                "numbers to trust, then build a simple forecast from them."
-            ),
+            "back": "You're an intern for Chris Belasco, the city's Chief Data Officer.",
             "full": (
-                "You are an intern working for Chris, and he has asked you to help with this next stage of the "
-                "project. You have a dataset of the city's quarterly revenue from 2012 to 2024, with one column for "
-                "each of the six extraction methods."
+                "You get a table of the city's revenue for every quarter from 2012 to 2024. It has six revenue "
+                "columns, one per extraction method, and they don't always agree. You decide which column to trust "
+                "and build a simple model from it that predicts next quarter's revenue."
             ),
         },
         "deliver": {
             "numeral": "iii",
             "title": "What you deliver",
-            "back": (
-                "A forecast of the city's revenue for the next quarter, and a short note to Chris saying how "
-                "confident he should be in it, and why."
-            ),
+            "back": "A forecast of next quarter's revenue, and a short note telling Chris how far to trust it.",
             "full": (
-                "Use the historical quarterly revenue data to build a predictive model for the city's revenue. "
-                "Beyond an accurate model, consider what the most appropriate way to extract the data is, and be "
-                "ready to explain to Chris how much to trust the result."
+                "Chris will act on your note, so he needs to know which numbers your forecast rests on and what "
+                "might be wrong with them. Be ready to explain why you trusted the column you chose."
             ),
         },
     }
-
     METHOD_LABELS = {
         "revenue by hand": "By hand (a person typed them in)",
-        "revenue by docling": "Docling (document-parsing software)",
-        "revenue by chatgpt": "ChatGPT (one-shot AI chat)",
-        "revenue by claude chat": "Claude chat (one-shot AI chat)",
-        "revenue by claude api": "Claude API (automated AI pipeline)",
-        "revenue by pypdf": "pypdf (a PDF text-extraction script)",
+        "revenue by docling": "Docling (software that reads documents)",
+        "revenue by chatgpt": "ChatGPT (asked once in a chat)",
+        "revenue by claude chat": "Claude chat (asked once in a chat)",
+        "revenue by claude api": "Claude API (a program that calls Claude)",
+        "revenue by pypdf": "pypdf (a script that pulls text out of PDFs)",
         "none": "None of them",
     }
-
     PREDICT_GUIDING = [
         "What previous decisions might have been made that impact your work here? Would your answer change if "
         "your role was different?",
@@ -335,7 +319,7 @@ with app.setup:
         },
         "truth": {
             "title": "3 · Who is right?",
-            "question": "Is any source automatically the truth? Look for quarters where the hand-typed value is the odd one out.",
+            "question": "Is the hand-typed column always right? Look for quarters where it disagrees with all the others.",
             "code": textwrap.dedent("""\
                 # Treat the hand-typed column as the truth and count disagreements per method
                 truth = revenue_data["revenue by hand"]
@@ -353,7 +337,7 @@ with app.setup:
         },
         "split": {
             "title": "5 · Testing the model",
-            "question": "This error is lower than the controls below give you. Did the model get better, or did the test get easier?",
+            "question": "This error is lower than the one the controls below give you. Did the model improve, or did the test get easier?",
             "code": textwrap.dedent("""\
                 frame = revenue_data[["revenue by hand"]].rename(columns={"revenue by hand": "revenue"})
                 frame["lag"] = frame["revenue"].shift(4)
@@ -381,33 +365,31 @@ with app.setup:
     """)
 
     EXPLAIN_PROMPTS = [
-        "Which method did you end up trusting, and what changed or confirmed your view since you made your prediction?",
+        "Which method did you end up trusting? What in the data changed or confirmed your prediction?",
         "What are your thoughts on using data extracted by AI? Did it affect the quality of your model?",
         "Write a short note to Chris: your forecast, how confident he should be in it, and why.",
     ]
 
     SOUND_COLUMNS = ("revenue by hand", "revenue by claude chat", "revenue by claude api", "revenue by pypdf")
     SOUND_COLUMN_TEXT = (
-        "By hand, Claude chat, Claude API or pypdf. They agree on every quarter except 2017 Q2, where all four "
-        "machine methods record $113,830,377 and the hand-typed value is $113,830,337."
+        "By hand, Claude chat, Claude API or pypdf. These four columns match on every quarter except 2017 Q2, where "
+        "the hand-typed value is $113,830,337 and the machine-read columns show $113,830,377."
     )
     COLUMN_VERDICTS = {
         "revenue by docling": {
             "why": "Docling read 2018 Q4 as $6,425 (the other sources say $95.4 million) and 2021 Q4 as $608.6 "
                    "million (the others say $129.7 million). It is also missing every quarter of 2013, 2017 and 2024.",
-            "cost": "Your model learned from a quarter where the city seemingly collected almost nothing, and from "
-                    "another four times its real size. Depending on the lag and split, those quarters either sit in "
-                    "the years the model trains on, where the error figure can't see them, or feed the quarters it is "
-                    "tested on, where they inflate the error without saying why. A budget built on this forecast "
-                    "rests on numbers nobody checked.",
+            "cost": "Your model learned from one quarter where the city seemed to collect almost nothing and another "
+                    "at four times its real size. Depending on the lag and split, those quarters land either in the "
+                    "training years, where the error figure can't see them, or in the test, where they push the "
+                    "error up with no sign of why. A budget built on this forecast would rest on numbers nobody checked.",
         },
         "revenue by chatgpt": {
             "why": "ChatGPT misread all four quarters of 2019 (for example $12.9 million where the reports say $122.2 million) "
                    "and is missing every quarter of 2013, 2014, 2022 and 2024.",
-            "cost": "At some lags and splits this column scores the lowest error of all six, so it can look like the "
-                    "best choice. Chris would "
-                    "be told the forecast is more reliable than it is, and the city could plan spending around "
-                    "revenue that was never there.",
+            "cost": "At some lags and splits this column has the lowest error of the six, so it can look like the best "
+                    "choice. Chris would think the forecast is more reliable than it is, and the city could plan "
+                    "spending around revenue it never collected.",
         },
         None: {
             "why": "You didn't choose a column, so no model was built.",
@@ -417,48 +399,49 @@ with app.setup:
     }
     MISSING_VERDICT = {
         "sound": "Remove rows with missing values, after checking which quarters they are.",
-        "why": "A linear regression can't train on blank quarters, so with missing values kept the model produced no "
+        "why": "A linear regression can't train on blank quarters, so with the blanks kept the model produced no "
                "error figure and no forecast.",
-        "cost": "With nothing to hand Chris, someone ends up filling the blanks by guessing, which is how unchecked "
-                "numbers slip into a budget.",
+        "cost": "With nothing to give Chris, someone ends up filling the blanks by guessing, and that is how "
+                "unchecked numbers get into a budget.",
     }
     LAG_VERDICT = {
-        "sound": "A lag of 4: each quarter is predicted from the same quarter a year earlier.",
+        "sound": "A lag of 4, which predicts each quarter from the same quarter a year earlier.",
         "why": "City revenue follows a yearly pattern: Q1 averages $214.9 million, against $104 to $132 million for "
-               "the other quarters. Other lags compare unlike quarters. For the hand-typed column, lag 4 roughly "
-               "halves the error ($85.6 million at lag 2, $42.2 million at lag 4).",
-        "cost": "The forecast would miss the seasonal swing, predicting a quiet quarter after a busy Q1 and a busy one "
-                "after a quiet quarter, so cash planning would be wrong in both directions.",
+               "the other quarters. Other lags compare quarters that don't match. For the hand-typed column, lag 4 "
+               "roughly halves the error ($85.6 million at lag 2, $42.2 million at lag 4).",
+        "cost": "The forecast would miss the seasonal swing. It would predict a quiet quarter after a busy Q1 and a "
+                "busy one after a quiet quarter, so cash planning would be wrong in both directions.",
     }
     SPLIT_VERDICTS = {
         "small": {
-            "why": "Training on so little history leaves the model only a handful of quarters to learn from. Its "
-                   "error can still look good (at 10%, the hand-typed column scores $27.9 million after learning "
-                   "from just 4 quarters), but that is luck, not skill.",
-            "cost": "Chris would get a forecast that looks well tested but rests on a year or two of history.",
+            "why": "Training on so little history gives the model only a handful of quarters to learn from. The error "
+                   "can still look good (at 10%, the hand-typed column scores $27.9 million after learning from just 4 "
+                   "quarters), but that score comes from luck.",
+            "cost": "Chris would get a forecast that looks well tested and rests on only a year or two of history.",
         },
         "large": {
             "why": "Training on 90% leaves only about 5 quarters to test on, so the error figure depends on which "
-                   "quarters happen to be last (the hand-typed column scores $11.7 million).",
+                   "quarters happen to come last (the hand-typed column scores $11.7 million).",
             "cost": "The error figure would make the forecast sound far more reliable than it is.",
         },
-        "sound": "50% to 80%: enough quarters to learn from, and enough recent quarters to test on.",
+        "sound": "50% to 80%, which leaves enough quarters to learn from and enough recent quarters to test on.",
     }
     REVEALS = {
-        "compare": "Averages hide single bad values. Docling records 2018 Q4 as $6,425 instead of $95.4 million, and "
-                   "ChatGPT misreads 2019, for example $12.9 million instead of $122.2 million. Only a "
-                   "row-by-row comparison shows them.",
+        "compare": "An average can hide a single bad value. Docling records 2018 Q4 as $6,425 instead of $95.4 "
+                   "million, and ChatGPT misreads 2019 (for example $12.9 million instead of $122.2 million). You "
+                   "only see these by comparing the columns row by row.",
         "plot": "Plotting every column shows spikes and drops no real budget has, and a pattern that repeats every "
                 "year: Q1 is by far the biggest quarter. That pattern is why a lag of 4, the same quarter last year, "
                 "works best.",
-        "truth": "On 2017 Q2 every machine method that read 2017 records $113,830,377 (Docling skipped the year), "
-                 "and only the hand-typed value differs "
-                 "($113,830,337). The person most likely made the typo. No source is automatically the truth.",
-        "missing": "The blanks aren't random. Docling and ChatGPT miss whole years, so dropping missing rows quietly "
-                   "removes years from the time series, and a year-ago comparison then lines up the wrong quarters.",
-        "split": "A random split mixes later quarters into training, so the model is partly tested on the past it "
-                 "has already seen around. Its $29.0 million error looks better than the honest chronological "
-                 "$42.2 million only because the test got easier.",
+        "truth": "In 2017 Q2 every machine method that read 2017 records $113,830,377 (Docling skipped the year), and "
+                 "only the hand-typed value differs ($113,830,337). The person most likely made a typo, so the "
+                 "hand-typed column needs checking too.",
+        "missing": "The blanks aren't random. Docling and ChatGPT miss whole years, so dropping rows with missing "
+                   "values removes those years from the series, and a comparison with the year before then lines up "
+                   "the wrong quarters.",
+        "split": "A random split puts later quarters into training, so the model is tested on quarters surrounded by "
+                 "ones it has already seen. Its $29.0 million error looks better than the $42.2 million you get by "
+                 "training on earlier quarters and testing on later ones, because the test got easier.",
     }
 
     class ModelUnavailable(Exception):
@@ -538,8 +521,14 @@ def next_quarter_forecast(data, column: str, lag: int) -> dict | None:
     return {
         "label": inputs["label"],
         "value": value,
-        "reason": f"Predicted from {inputs['source_label']}, {lag} quarter(s) earlier, using every usable quarter.",
+        "reason": f"Based on {inputs['source_label']}, {quarters_text(lag)} earlier. For this forecast the model is "
+                  "refit on every usable quarter.",
     }
+
+
+@app.function
+def quarters_text(count: int) -> str:
+    return "1 quarter" if count == 1 else f"{count} quarters"
 
 
 @app.function
@@ -548,7 +537,7 @@ def forecast_unavailable_reason(data, column: str, lag: int) -> str:
     if inputs is None:
         return "This column has no values at all."
     if inputs["source_label"] is None:
-        return f"There is no quarter {lag} quarter(s) before {inputs['label']} to predict from."
+        return f"The data has no quarter {quarters_text(lag)} before {inputs['label']} to predict from."
     return (f"To forecast {inputs['label']} with a lag of {lag}, the model needs {inputs['source_label']}, "
             "which is missing in this column.")
 
@@ -572,14 +561,16 @@ def fooled_rows(data) -> list[dict]:
         ("Hand-typed column, lag 4, 80% training", chronological_rmse(data, "revenue by hand", 4, 0.8),
          "A sensible model, tested on the most recent quarters."),
         ("ChatGPT column, lag 2, 80% training", chronological_rmse(data, "revenue by chatgpt", 2, 0.8),
-         "The lowest error of any column, yet this column misreads several quarters and misses whole years. Its errors sit in "
-         "the years the model learns from, and its test covers different quarters, so the score can't show them."),
+         "The lowest error of any column at these settings, even though this column misreads four quarters and misses "
+         "whole years. The bad values are in the training years and the test covers other quarters, so the score "
+         "can't show them."),
         ("Hand-typed column, lag 4, 10% training", chronological_rmse(data, "revenue by hand", 4, 0.1),
-         "The model learned from only 4 quarters. The low error is luck, not skill."),
+         "The model learned from only 4 quarters, so the low error is luck."),
         ("Hand-typed column, lag 4, 90% training", chronological_rmse(data, "revenue by hand", 4, 0.9),
          "Tested on only 5 quarters, so the score depends on which 5 happen to be at the end."),
         ("Hand-typed column, lag 4, random split", random_split_rmse(data, "revenue by hand", 4),
-         "A random split lets the model learn from quarters after the ones it is tested on. It peeked at the future."),
+         "A random split lets the model learn from quarters that come after the ones it is tested on, so it has "
+         "already seen the future."),
     ]
     return [{"setting": s, "reported_rmse_m": round(v / 1e6, 1), "what_is_going_on": w} for s, v, w in cases]
 
@@ -787,8 +778,7 @@ def stage_header_html(stage: int) -> str:
         for i, name in enumerate(STAGES, 1)
     )
     return (
-        f'<div class="ss ss-stage"><div class="ss-stage-top"><p class="ss-lab cr">Stage {stage} of 4</p>'
-        f'<p class="ss-lab">{BRIEF_NAME}</p></div>'
+        f'<div class="ss ss-stage"><div class="ss-stage-top"><p class="ss-lab cr">Stage {stage} of 4</p></div>'
         f'<h2 class="ss-stage-title">{STAGES[stage - 1]}</h2><ol class="ss-progress">{steps}</ol></div>'
     )
 
@@ -1084,11 +1074,11 @@ def _():
     import marimo as mo
 
     mo.Html(
-        f"{FONT_LINK}<style>{PALETTE}{BRIEF_STYLE}</style><div class='ss'>"
-        f"<div class='ss-mast'><p class='ss-lab'>{BRIEF_NAME}</p><p class='ss-lab'>{' → '.join(STAGES)}</p></div>"
+        f"{FONT_LINK}<style>{PALETTE}{BRIEF_STYLE}</style><div class='ss' style='margin-top:24px'>"
         "<div class='ss-hero'><div><p class='ss-kicker'>ConCReTE · City of Pittsburgh</p>"
         "<h1 class='ss-title'>Forecasting the city's revenue</h1></div>"
-        "<div><p class='ss-byline'><b>Quarterly revenue, 2012–2024</b><br>One table, extracted six ways:</p>"
+        "<div><p class='ss-byline'><b>The data</b><br>The city's revenue for every quarter from 2012 to 2024, "
+        "copied out of its PDF reports in six ways:</p>"
         "<ul class='ss-sources'><li>By hand</li><li>Docling</li><li>ChatGPT</li><li>Claude chat</li>"
         "<li>Claude API</li><li>pypdf</li></ul></div></div></div>"
     )
@@ -1217,10 +1207,10 @@ def predict(get_opened, get_prediction, lock_button, lock_warning, method_choice
     _header = [
         mo.Html(stage_header_html(1)),
         mo.Html(
-            "<div class='ss ss-prompt'>Before you see the data, form your own view. Think through these questions "
-            f"first. Nobody will grade your answers to them:<ul>{_guiding}</ul>Then commit to a position below. "
-            "<strong>Once you lock your prediction it cannot be changed.</strong> You will come back to it at the "
-            "end.</div>"
+            "<div class='ss ss-prompt'>Before you look at the data, decide what you think. These questions can help "
+            f"you think it through, and nobody grades your answers to them:<ul>{_guiding}</ul>Then answer the three "
+            "questions below. <strong>Once you lock your prediction you can't change it.</strong> You'll come back "
+            "to it at the end.</div>"
         ),
     ]
     if get_prediction() is None:
@@ -1317,10 +1307,9 @@ def observe_intro(get_prediction, mo, pgh_revenue_data):
     mo.vstack([
         mo.Html(stage_header_html(2)),
         mo.Html(
-            "<div class='ss ss-prompt'>Here is the city's quarterly revenue as each method extracted it. "
-            "Explore it with the five code cells below: run each one as it is, then change it to dig deeper. "
-            "The question beside each cell is a hint about where to look. Then build your forecast with the "
-            "controls further down. The AI helper can explain code, errors and ideas, but the choices are yours.</div>"
+            "<div class='ss ss-prompt'>This is the city's quarterly revenue, with one column for each extraction "
+            "method. Below are five code cells. Run each one as it is, then change the code to look further; the "
+            "hint above each cell suggests where. After that, build your forecast with the controls further down.</div>"
         ),
         pgh_revenue_data,
     ])
@@ -1331,10 +1320,10 @@ def observe_intro(get_prediction, mo, pgh_revenue_data):
 def helper_panel(get_prediction, helper, mo):
     mo.stop(get_prediction() is None)
     mo.vstack([
-        mo.Html("<div class='ss ss-head'><p class='ss-lab'>Assistant</p><h3 class='ss-task-title'>Ask the AI helper</h3>"
-                "<p class='ss-desc'>Your model on CRCD can see the data, your code in the five cells below, "
-                "and your current settings. Ask it to explain code, errors or ideas. It won't make your choices for "
-                "you.</p></div>"),
+        mo.Html("<div class='ss ss-head'><p class='ss-lab'>AI helper</p><h3 class='ss-task-title'>Ask the AI helper</h3>"
+                "<p class='ss-desc'>The helper runs on your model on CRCD. It can see the data, the code in the five "
+                "cells below and your current settings. Ask it about code, error messages or ideas; it won't make "
+                "your choices for you.</p></div>"),
         helper,
     ])
     return
@@ -1360,9 +1349,9 @@ def observe_cells(cell_editors, cell_run_buttons, get_cells, get_outputs, get_pr
             if not _shown:
                 _shown = [mo.md("*Ran with no output.*")]
         _panels.append(mo.vstack([
-            mo.Html(f"<div class='ss ss-head'><p class='ss-lab ss-swy'>Show your work · cell {_number} of "
+            mo.Html(f"<div class='ss ss-head'><p class='ss-lab ss-swy'>Code cell {_number} of "
                     f"{len(STARTER_CELLS)}</p><h3 class='ss-task-title'>{html.escape(_cell['title'])}</h3>"
-                    f"<div class='ss-hint'><b>Where to look</b>{html.escape(_cell['question'])}</div></div>"),
+                    f"<div class='ss-hint'><b>Hint</b>{html.escape(_cell['question'])}</div></div>"),
             *([mo.md(f"```python\n{get_cells()[_key]}\n```")] if get_submitted() else [cell_editors[_key], cell_run_buttons[_key]]),
             *_shown,
         ]))
@@ -1520,9 +1509,8 @@ def explain(
     mo.stop(not explain_unlocked(get_prediction(), get_runs()))
     _header = [
         mo.Html(stage_header_html(3)),
-        mo.Html("<div class='ss ss-prompt'>Look back at what you predicted before you saw the data, and at what you "
-                "found. Write for yourself and for Chris. Nobody will grade the wording, only whether your "
-                "reasoning holds up.</div>"),
+        mo.Html("<div class='ss ss-prompt'>Compare what you predicted with what you found in the data. Nobody "
+                "grades the wording, only whether your reasoning holds up.</div>"),
         mo.Html(locked_prediction_html(get_prediction())),
     ]
     if get_submitted():
@@ -1570,9 +1558,8 @@ def evaluate(
     }
     mo.vstack([
         mo.Html(stage_header_html(4)),
-        mo.Html("<div class='ss ss-prompt'>Here is how your forecast holds up. Part 1 covers only the settings worth "
-                "a second look. Part 2 shows why the error number alone can mislead. Part 3 shows what each code "
-                "cell could reveal.</div>"),
+        mo.Html("<div class='ss ss-prompt'>Part 1 lists only the settings worth a second look. Part 2 shows how "
+                "the error number can mislead. Part 3 shows what each code cell could have revealed.</div>"),
         mo.Html(evaluation_html(pgh_revenue_data, final_settings, get_cells(), get_runs())),
     ])
     return (final_settings,)
@@ -1582,7 +1569,7 @@ def evaluate(
 def download_brief(final_settings, get_cells, get_explain, get_prediction, get_runs, helper_log, mo, pgh_revenue_data):
     _doc = report_html(pgh_revenue_data, get_prediction(), final_settings, get_explain(), helper_log, get_cells(), get_runs())
     mo.vstack([
-        mo.Html("<div class='ss ss-head'><p class='ss-lab'>Take it with you</p>"
+        mo.Html("<div class='ss ss-head'><p class='ss-lab'>Before you leave</p>"
                 "<h3 class='ss-task-title'>Download your brief</h3></div>"),
         mo.md("The file holds your prediction, your forecast, your reflection, your questions to the helper and "
               "this evaluation. It opens in any browser; use **Print → Save as PDF** for a PDF."),
