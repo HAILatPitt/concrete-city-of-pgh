@@ -1,7 +1,7 @@
 [project]
-name = "concrete-interaction-test"
+name = "concrete-city-of-pgh"
 version = "0.1.0"
-description = "Testing a ConCReTE interaction"
+description = "ConCReTE scenario: forecasting the City of Pittsburgh's quarterly revenue"
 requires-python = ">=3.11"
 dependencies = [
     "marimo==0.18.0",
