@@ -4,7 +4,10 @@ __generated_with = "0.18.0"
 app = marimo.App(width="compact", app_title="ConCReTE Model Building")
 
 with app.setup:
+    import ast
     import asyncio
+    import contextlib
+    import io
     import functools
     import html
     import json
@@ -243,6 +246,76 @@ with app.setup:
         "to notice?",
         "Would you trust a person typing the numbers by hand more? What mistakes do people make?",
     ]
+
+    STARTER_CELLS = {
+        "compare": {
+            "title": "1 · Compare the sources",
+            "question": "The averages look similar. Does that mean every quarter matches? How would you check row by row?",
+            "code": textwrap.dedent("""\
+                # Average quarterly revenue reported by each extraction method
+                methods = [c for c in revenue_data.columns if c.startswith("revenue by")]
+                revenue_data[methods].mean().round(0)
+            """),
+        },
+        "plot": {
+            "title": "2 · Plot over time",
+            "question": "Add the other columns to the plot. Does anything look impossible for a city budget? Do you see a pattern that repeats every year?",
+            "code": textwrap.dedent("""\
+                labels = revenue_data["year"].astype(str) + " " + revenue_data["quarter"]
+                plt.figure(figsize=(9, 4))
+                plt.plot(labels, revenue_data["revenue by hand"], label="by hand")
+                plt.xticks(labels[::4], rotation=45)
+                plt.ylabel("Revenue ($)")
+                plt.title("Quarterly revenue")
+                plt.legend()
+            """),
+        },
+        "truth": {
+            "title": "3 · Who is right?",
+            "question": "Is any source automatically the truth? Look for quarters where the hand-typed value is the odd one out.",
+            "code": textwrap.dedent("""\
+                # Treat the hand-typed column as the truth and count disagreements per method
+                truth = revenue_data["revenue by hand"]
+                others = [c for c in revenue_data.columns if c.startswith("revenue by") and c != "revenue by hand"]
+                {method: int(((revenue_data[method] - truth).abs() > 1).sum()) for method in others}
+            """),
+        },
+        "missing": {
+            "title": "4 · Missing values",
+            "question": "Which quarters are missing for each method? What happens to \"the same quarter last year\" if a whole year disappears?",
+            "code": textwrap.dedent("""\
+                # How many blanks does each column have?
+                revenue_data.isna().sum()
+            """),
+        },
+        "split": {
+            "title": "5 · Testing the model",
+            "question": "This error is lower than the controls below give you. Did the model get better, or did the test get easier?",
+            "code": textwrap.dedent("""\
+                frame = revenue_data[["revenue by hand"]].rename(columns={"revenue by hand": "revenue"})
+                frame["lag"] = frame["revenue"].shift(4)
+                frame = frame.dropna()
+                train, test = train_test_split(frame, test_size=0.2, random_state=0)
+                model = LinearRegression().fit(train[["lag"]], train["revenue"])
+                error = root_mean_squared_error(test["revenue"], model.predict(test[["lag"]]))
+                print(f"Error: ${error / 1e6:.1f} million")
+            """),
+        },
+    }
+
+    HELPER_RULES = textwrap.dedent("""\
+        You are a patient teaching assistant inside a data-science exercise for university students.
+        The student is investigating six versions of the City of Pittsburgh's quarterly revenue, each extracted from
+        PDF reports by a different method, and building a simple lag-based forecast.
+
+        How to help:
+        - Explain concepts (lags, missing values, train/test splits, error measures), Python and pandas code, and error messages.
+        - When they ask what is wrong with the data, guide them toward HOW to look (compare columns row by row, plot them, check where values disagree) rather than telling them WHAT you see.
+        - Never choose a column, a lag or a split for them, never name specific wrong values or quarters, and never grade their work.
+        - Keep answers short: a few sentences, with a small code example when it helps.
+
+        You can see the data, their current code in each exploration cell with its last output, and their current settings below.
+    """)
 
     class ModelUnavailable(Exception):
         """The student's model server could not be reached or gave an unusable reply."""
@@ -529,6 +602,75 @@ def locked_prediction_html(prediction: dict) -> str:
     )
 
 
+@app.function
+def cell_namespace(data) -> dict:
+    return {
+        "revenue_data": data.copy(),
+        "pd": pd,
+        "LinearRegression": LinearRegression,
+        "root_mean_squared_error": root_mean_squared_error,
+        "train_test_split": train_test_split,
+        "plt": plt,
+    }
+
+
+@app.function
+def run_cell(code: str, data) -> dict:
+    """Run a student's cell on a fresh copy of the data; return stdout, last value, error and any figure."""
+    namespace = cell_namespace(data)
+    stdout = io.StringIO()
+    value, error = None, None
+    plt.close("all")
+    try:
+        tree = ast.parse(code)
+        last = tree.body.pop() if tree.body and isinstance(tree.body[-1], ast.Expr) else None
+        with contextlib.redirect_stdout(stdout):
+            exec(compile(tree, "<cell>", "exec"), namespace)
+            if last is not None:
+                value = eval(compile(ast.Expression(last.value), "<cell>", "eval"), namespace)
+    except Exception as exc:
+        error = f"{type(exc).__name__}: {exc}"
+    return {
+        "stdout": stdout.getvalue(),
+        "value": None if value is None else repr(value),
+        "result": value,
+        "error": error,
+        "figure": plt.gcf() if plt.get_fignums() else None,
+    }
+
+
+@app.function
+def explain_unlocked(prediction, runs: dict) -> bool:
+    return prediction is not None and all(runs.get(key, 0) >= 1 for key in STARTER_CELLS)
+
+
+@app.function
+def cell_summary(key: str, cell: dict) -> str:
+    output = (cell.get("output") or "")[:2000]
+    return f"--- Cell {key} ---\nCode:\n{cell.get('code', '')}\nLast output:\n{output}"
+
+
+@app.function
+def helper_system_prompt(data_csv: str, cells: dict, settings: dict) -> str:
+    sections = "\n\n".join(cell_summary(key, cell) for key, cell in cells.items())
+    chosen = ", ".join(f"{name}={value}" for name, value in settings.items()) or "none yet"
+    return f"{HELPER_RULES}\n\nDATA (CSV):\n{data_csv}\n\nEXPLORATION CELLS:\n{sections}\n\nCURRENT SETTINGS: {chosen}"
+
+
+@app.function
+def output_text(result: dict | None) -> str:
+    if not result:
+        return ""
+    return "\n".join(part for part in (result["stdout"], result["value"] or "", result["error"] or "") if part)
+
+
+@app.function
+def run_and_record(editor, data, set_outputs, set_runs, key: str, _value=None) -> None:
+    result = run_cell(editor.value, data)
+    set_outputs(lambda outputs: with_entry(outputs, key, result))
+    set_runs(lambda runs: with_entry(runs, key, runs.get(key, 0) + 1))
+
+
 @app.cell(hide_code=True)
 def _():
     import marimo as mo
@@ -539,12 +681,6 @@ def _():
         "<h1 class='ss-title'>Forecasting the city's revenue</h1></div>"
     )
     return (mo,)
-
-
-@app.cell
-def _(mo):
-    get_intro_dialog_loaded, set_intro_dialog_loaded = mo.state(False)
-    return get_intro_dialog_loaded, set_intro_dialog_loaded
 
 
 @app.cell
@@ -705,360 +841,224 @@ def briefing(get_prediction, mo):
 
 
 @app.cell(hide_code=True)
-def _(mo, set_intro_dialog_loaded):
-    context = """
-        # **ConCReTE: City of Pittsburgh Module**
-        ---
-        ## **The Story So Far**
-        The City of Pittsburgh is implementing a three-year data strategy under the leadership of Chris Belasco, Senior Manager of Digital Services and Chief Data Officer. This strategy positions data as a critical asset to enhance city operations, engage the community, and drive equity. The city focuses on improving data accessibility and quality while fostering a culture of insight-driven decision-making. Participants in this initiative are tasked with analyzing and forecasting the city’s revenue, which is critical for supporting Pittsburgh’s long-term goals. Prior to the start of this scenario, Chris's team has:
-
-        1. Identified a need to forecast the city's revenue.
-        2. Reviewed historical revenue data and identified the specific tables needed in the City's Revenue Report PDFs; namely, the Q4 Revenue Summary Table from each report and the Quarterly Revenue Totals (Actual, not projected) from each table.
-        3. Downloaded the Revenue Report PDFs and extracted the Q4 Revenue Summary Tables into separate documents.
-        4. Used six different methodologies to extract the actual quarterly revenue totals from each PDF table.
-            - Manual Extraction by a Human
-            - Automated Extraction with Docling
-            - Automated Extraction with One-Shot AI ChatBot (Claude & ChatGPT)
-            - Automated Extraction Claude API (PDF & Images)
-            - Automated Extraction with pypdf
-
-        ### Role
-        You are an intern working for Chris, and he has asked you to help out with this next stage of the project.
-
-        ### Business Objective
-        You want to use the historical quarterly revenue data to create a predictive model for the city's revenue.
-        Beyond creating an accurate predictive model, you will need to consider what the most appropriate way to approach parsing the data is.
-
-        ### Data
-        We have a dataset of the city's quarterly revenue from 2012 to 2023.
-
-        ---
-        """
-
-    rdso_1 = """
-    ### *RDSO 1: Evaluate*
-    _What previous decisions might have been made that impact your work here? Would your answer change if your role was different?_
-    """
-
-    rdso_2 = """
-    ### *RDSO 2: Predict*
-    _Before selecting from one of the 6 options below, consider each option carefully. Do any of them raise technical or ethical concerns?_
-    """
-
-    rdso_3 = """
-    ### *RDSO 3: Synthesize*
-    _What are your thoughts on using data extracted by AI? Did it affect the quality of your model?_
-    """
-
-    _base = (
-        "You are reviewing the work of a student learning responsible data science skills. "
-        "Below is the context of the scenario they are working within and the one question they are answering right now. "
-        "Give them feedback on their response in the form of a single follow-up question. "
-        "Once they respond to your follow-up, encourage them to move to the next part of the scenario."
-    )
-    _questions = {1: rdso_1, 2: rdso_2, 3: rdso_3}
-    # student messages per chat, so later chats know earlier answers.
-    # plain dict, not mo.state: updating it must not re-run cells (that would wipe the chats)
-    _answers = {}
-
-    def _make_tutor(n):
-        def tutor(messages, config):
-            _answers[n] = [m.content for m in messages if m.role == "user"]
-            if not input_key.value:
-                return "Please paste your Groq API key in the box at the top of the page (see **Before you start**), press Enter, then send your message again."
-            system = f"{_base}\n\n{context}\n\nCURRENT QUESTION:\n{_questions[n]}"
-            earlier = "\n\n".join(
-                f"RDSO {k}:\n" + "\n".join(_answers[k]) for k in range(1, n) if _answers.get(k)
-            )
-            if earlier:
-                system += f"\n\nFor reference, the student's earlier answers in this scenario:\n{earlier}"
-            llm = mo.ai.llm.groq(model="llama-3.1-8b-instant", system_message=system, api_key=input_key.value)
-            return llm(messages, config)
-        return tutor
-
-    chat_1, chat_2, chat_3 = (mo.ui.chat(_make_tutor(n)) for n in (1, 2, 3))
-    set_intro_dialog_loaded(True)
-    mo.vstack([mo.md(context), mo.vstack([mo.md(rdso_1), chat_1]).callout()])
-    return chat_2, chat_3, rdso_2, rdso_3
-
-
-@app.cell(hide_code=True)
-def _(mo, pd):
-    import sys as _sys
-    # load the data (a local path when run locally, a URL in the browser build)
-    data_path = str(mo.notebook_location() / "public" / "data" / "all_extracted_data.csv")
-    if "pyodide" in _sys.modules:
-        # fetch the text ourselves: given the URL, pandas sees GitHub Pages' gzip header
-        # and tries to decompress text the browser already decompressed (BadGzipFile)
+def load_data(mo):
+    # A local path when run locally, a URL in the browser build.
+    _path = str(mo.notebook_location() / "public" / "data" / "all_extracted_data.csv")
+    if "pyodide" in sys.modules:
+        # Fetch the text ourselves: given the URL, pandas sees GitHub Pages' gzip header
+        # and tries to decompress text the browser already decompressed (BadGzipFile).
         from pyodide.http import open_url
-        data_path = open_url(data_path)
-    pgh_revenue_data = pd.read_csv(data_path)
 
-    # create a new column that is the year and quarter combined
-    pgh_revenue_data['Year-Quarter'] = pgh_revenue_data['year'].astype(str) + '-' + pgh_revenue_data['quarter']
+        _path = open_url(_path)
+    pgh_revenue_data = pd.read_csv(_path)
     return (pgh_revenue_data,)
 
 
-@app.cell(hide_code=True)
-def _(
-    chat_2,
-    is_ai_source,
-    mo,
-    pgh_revenue_data,
-    rdso_2,
-    revenue_selector,
-):
-    ds_task = mo.md(
-        """
-        ---
-        ## **Data Science Task: Building a Forecasting Model**
-        You have a tabular dataset, `all_extracted_data.csv`, which contains all of the extracted data for each of the 6 methods. Your goal is to try to accurately predict quarterly revenue values using this historical data.
-        First we load our dataset `all_extracted_data.csv` which contains the city's quarterly revenue.
-        Use the DataFrame explorer below to get familiar with the data. What differences do you notice?
-        """
+@app.cell
+def observe_states(mo):
+    get_cells, set_cells = mo.state({key: cell["code"] for key, cell in STARTER_CELLS.items()})
+    get_runs, set_runs = mo.state({key: 0 for key in STARTER_CELLS})
+    get_outputs, set_outputs = mo.state({key: None for key in STARTER_CELLS})
+    # Plain containers, read when needed: the helper chat must never be recreated (that wipes its history).
+    helper_context = {"base": "", "csv": "", "cells": {}, "settings": {}}
+    helper_log = []
+    return (
+        get_cells,
+        get_outputs,
+        get_runs,
+        helper_context,
+        helper_log,
+        set_cells,
+        set_outputs,
+        set_runs,
     )
 
-    options = mo.md(
-        "Our dataset has six options for the quarterly revenue data. We need to pick one."
-    )
-
-    ai_warning = (
-                    mo.md(f"You have selected the **{revenue_selector.value}** dataset.").callout()
-                    if not is_ai_source
-                    else mo.md(f"""You have selected the **{revenue_selector.value}** dataset, which was extracted using AI.""").callout("warn")
-                )
-
-
-    # display the data
-    data_vstack = mo.vstack([ds_task, pgh_revenue_data])
-    rdso_2_vstack = mo.vstack([mo.md(rdso_2), chat_2]).callout()
-    selector_vstack = mo.vstack([revenue_selector, ai_warning])
-
-    mo.vstack([data_vstack, options, rdso_2_vstack, selector_vstack])
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo, pgh_revenue_data, revenue_selector):
-    rev_description = mo.md("Now you can create a new dataframe, `revenues`, with just the dataset you have selected.")
-
-    # create a copy of just the data we want
-    revenues = pgh_revenue_data[['Year-Quarter', revenue_selector.value]].copy()
-    revenues = revenues.rename(columns={revenue_selector.value:"revenue"})
-    mo.vstack([rev_description, revenues])
-    return (revenues,)
-
 
 @app.cell
-def _(get_intro_dialog_loaded, mo):
-    mo.stop(not get_intro_dialog_loaded())
-    mo.md(f"""Now you need to select features for the statistical models. These features will be the inputs to your modeling function. We are doing a [time-series analysis](https://www.geeksforgeeks.org/machine-learning/time-series-analysis-and-forecasting/) so our features are [lagged values.](https://www.geeksforgeeks.org/machine-learning/what-is-lag-in-time-series-forecasting/) Use the slider below to select how much lag we should lag our features.""")
-    return
-
-
-@app.cell(hide_code=True)
-def _(lag_amount, mo):
-    mo.vstack([lag_amount, f"You have selected a lag of {lag_amount.value}"])
-    return
-
-
-@app.cell
-def _(lag_amount, revenues):
-    # add lag value column
-    lagged_revenues = revenues.assign(lag=revenues['revenue'].shift(lag_amount.value))
-    lagged_revenues
-    return (lagged_revenues,)
-
-
-@app.cell
-def _(get_intro_dialog_loaded, mo):
-    mo.stop(not get_intro_dialog_loaded())
-    mo.md(f"""Notice the [missing values](https://www.geeksforgeeks.org/python/how-to-deal-with-missing-values-in-a-timeseries-in-python/) as you increase the lag. Also note, depending on which extraction method column you selected there are missing values as well. Do you want to clean the data and remove rows with missing values?""")
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo, remove_missing):
-    mo.hstack([
-        remove_missing,
-        mo.md(
-            f"You have decided {'**not**' if not remove_missing.value else ''} to remove missing values."
-            f"{' This will feed your model `NULL` values.' if not remove_missing.value else ''}"
+def cell_controls(mo, pgh_revenue_data, set_cells, set_outputs, set_runs):
+    # Plain dicts: the cell that renders these must not re-run while the learner types.
+    cell_editors = {
+        key: mo.ui.code_editor(
+            value=cell["code"], language="python", min_height=110,
+            on_change=functools.partial(record_field, set_cells, key),
         )
-    ], justify="start", gap=5)
-    return
-
-
-@app.cell(hide_code=True)
-def _(lagged_revenues, remove_missing):
-    # optionally drop rows with missing values
-    clean_revenues = lagged_revenues.dropna() if remove_missing.value else lagged_revenues.copy()
-    clean_revenues
-    return (clean_revenues,)
-
-
-@app.cell(hide_code=True)
-def _(mo, training_percent):
-    mo.md(f"""
-    What percentage of the data do you want to use for [training?](https://www.geeksforgeeks.org/python/training-data-vs-testing-data/#what-is-training-data?)
-
-    {training_percent}
-
-    You have selected {training_percent.value * 100:.0f}% of the data for training.
-    """)
-    return
+        for key, cell in STARTER_CELLS.items()
+    }
+    cell_run_buttons = {
+        key: mo.ui.run_button(
+            label="Run",
+            on_change=functools.partial(run_and_record, cell_editors[key], pgh_revenue_data, set_outputs, set_runs, key),
+        )
+        for key in STARTER_CELLS
+    }
+    return cell_editors, cell_run_buttons
 
 
 @app.cell
-def _(clean_revenues, training_percent):
-    # Chronological split
-    train_size = int(len(clean_revenues) * training_percent.value)
-    train = clean_revenues.iloc[:train_size]
-    test = clean_revenues.iloc[train_size:]
-
-    x_train = train[['lag']]
-    y_train = train['revenue']
-    x_test = test[['lag']]
-    y_test = test['revenue']
-    return x_test, x_train, y_test, y_train
+def model_controls(mo):
+    column_choice = mo.ui.radio(
+        options={label: key for key, label in METHOD_LABELS.items() if key != "none"}, value=None,
+        label="Revenue column",
+    )
+    lag_amount = mo.ui.slider(start=1, stop=5, step=1, value=1, label="Lag (quarters)", show_value=True)
+    remove_missing = mo.ui.switch(label="Remove missing values")
+    training_share = mo.ui.slider(start=0.1, stop=0.9, step=0.1, value=0.1, label="Training share", show_value=True)
+    return column_choice, lag_amount, remove_missing, training_share
 
 
 @app.cell(hide_code=True)
-def _(mo, x_test, x_train, y_test, y_train):
-    mo.hstack([mo.vstack([mo.md("**X Train**"),x_train,mo.md("**Y Train**"),y_train]),
-              mo.vstack([mo.md("**X Test**"),x_test,mo.md("**Y Test**"),y_test]),
-              ])
-    return
-
-
-@app.cell
-def _(get_intro_dialog_loaded, mo):
-    mo.stop(not get_intro_dialog_loaded())
+def observe_intro(get_prediction, mo, pgh_revenue_data):
+    mo.stop(get_prediction() is None)
     mo.vstack([
-        mo.md("---"),
-        mo.md(f"""## **Forecasting Model Implementation**
-    Now you have everything you need to generate the model. As you've made your selections, Marimo has been building the model dynamically behind the scenes. Below are your results alongside a dashboard where you can adjust all parameters in one place if you'd like to make changes."""),
-        mo.md("---")
+        mo.Html(stage_header_html(2)),
+        mo.Html(
+            "<div class='ss ss-prompt'>Here is the city's quarterly revenue as each method extracted it. "
+            "Explore it with the five code cells below: run each one as it is, then change it to dig deeper. "
+            "The question beside each cell is a hint about where to look. Then build your forecast with the "
+            "controls further down. The AI helper can explain code, errors and ideas, but the choices are yours.</div>"
+        ),
+        pgh_revenue_data,
     ])
     return
 
 
 @app.cell(hide_code=True)
-def _(
-    LinearRegression,
-    mo,
-    root_mean_squared_error,
-    x_test,
-    x_train,
-    y_test,
-    y_train,
+def observe_cells(cell_editors, cell_run_buttons, get_outputs, get_prediction, mo):
+    mo.stop(get_prediction() is None)
+    _panels = []
+    for _key, _cell in STARTER_CELLS.items():
+        _result = get_outputs()[_key]
+        _shown = [mo.md("*Not run yet.*")]
+        if _result is not None:
+            _shown = []
+            if _result["stdout"]:
+                _shown.append(mo.md(f"```\n{_result['stdout']}\n```"))
+            if _result["result"] is not None:
+                _shown.append(_result["result"] if isinstance(_result["result"], (pd.DataFrame, pd.Series)) else mo.md(f"```\n{_result['value']}\n```"))
+            if _result["figure"] is not None:
+                _shown.append(mo.as_html(_result["figure"]))
+            if _result["error"]:
+                _shown.append(mo.Html(f"<div class='ss ss-note'><strong>Error.</strong> {html.escape(_result['error'])}</div>"))
+            if not _shown:
+                _shown = [mo.md("*Ran with no output.*")]
+        _panels.append(mo.vstack([
+            mo.Html(f"<h3 class='ss ss-task-title'>{html.escape(_cell['title'])}</h3>"
+                    f"<div class='ss ss-note'>{html.escape(_cell['question'])}</div>"),
+            cell_editors[_key],
+            cell_run_buttons[_key],
+            *_shown,
+        ]))
+    mo.vstack(_panels, gap=1.5)
+    return
+
+
+@app.cell(hide_code=True)
+def forecast_model(column_choice, get_prediction, lag_amount, mo, pgh_revenue_data, remove_missing, training_share):
+    mo.stop(get_prediction() is None)
+    _controls = mo.vstack([column_choice, lag_amount, remove_missing, training_share])
+    if column_choice.value is None:
+        _result = mo.Html("<div class='ss ss-note'>Choose a revenue column to build the model.</div>")
+    else:
+        _frame = build_lagged(pgh_revenue_data, column_choice.value, lag_amount.value, remove_missing.value)
+        try:
+            _score = score_model(_frame, training_share.value)
+            _forecast = next_quarter_forecast(pgh_revenue_data, column_choice.value, lag_amount.value)
+            _forecast_text = (
+                f"**Forecast for {_forecast['label']}:** ${_forecast['value']:,.0f}  \n*{_forecast['reason']}*"
+                if _forecast
+                else f"**No forecast possible.** {forecast_unavailable_reason(pgh_revenue_data, column_choice.value, lag_amount.value)}"
+            )
+            _result = mo.md("\n".join([
+                f"**Error (RMSE): ${_score['rmse']:,.0f}**, trained on {_score['train_rows']} quarters and tested on {_score['test_rows']}.",
+                "",
+                f"- On average, the predictions for the test quarters are off by ${_score['rmse']:,.0f}.",
+                f"- The average actual revenue in those quarters is ${_score['test_mean']:,.0f}, so the error is "
+                f"{_score['rmse'] / _score['test_mean'] * 100:.1f}% of it.",
+                f"- The test quarters range from ${_score['test_min']:,.0f} to ${_score['test_max']:,.0f}.",
+                "",
+                _forecast_text,
+            ]))
+        except ValueError as _error:
+            _result = mo.Html(f"<div class='ss ss-note'>{html.escape(str(_error))}</div>")
+    mo.vstack([
+        mo.Html("<h3 class='ss ss-task-title'>Build your forecast</h3>"),
+        mo.Html("<div class='ss ss-prompt'>Choose which column to trust, how far back the model looks (the lag), "
+                "whether to drop rows with missing values, and how much of the history to train on. The model "
+                "trains on the earliest quarters and is tested on the latest ones.</div>"),
+        _controls,
+        _result,
+    ])
+    return
+
+
+@app.cell
+def update_helper_context(
+    column_choice,
+    get_cells,
+    get_model_base,
+    get_outputs,
+    helper_context,
+    lag_amount,
+    pgh_revenue_data,
+    remove_missing,
+    training_share,
 ):
-    try:
-        # train the model
-        model = LinearRegression()
-        model.fit(x_train, y_train)
-        predictions = model.predict(x_test)
-
-        output = mo.md(
-            f"""
-            *The model has a Root Mean Square Error (RMSE) of ${root_mean_squared_error(y_test, predictions):,.2f}*
-
-            *What this means:*
-
-            - *On average, your predictions are off by ${root_mean_squared_error(y_test, predictions):,.2f}*
-            - *The average actual revenue in your test set is ${y_test.mean():,.2f}*
-            - *The RMSE represents {(root_mean_squared_error(y_test, predictions)/y_test.mean()*100):.1f}% of the average revenue*
-
-            *For context:*
-
-            - *68% of predictions should fall within ±${root_mean_squared_error(y_test, predictions):,.2f} of the actual value*
-            - *The minimum revenue in your test set is ${y_test.min():,.2f}*
-            - *The maximum revenue in your test set is ${y_test.max():,.2f}*
-        """
-        ).callout('info')
-    except Exception as e:
-        output = mo.md(
-            f"**Your code has an error!**\n\n```\n{e}\n```\n\nTry adjusting your selections and running the code again."
-        ).callout("danger")
-
-    output
-    return
-
-
-@app.cell(hide_code=True)
-def _(lag_amount, mo, remove_missing, revenue_selector, training_percent):
-    mo.md(f"""
-    ## Adjust your selections
-
-    Play with the options again and see how the statistical performance changes.
-
-    What combination of choices are most accurate?
-
-    {mo.hstack([revenue_selector, mo.vstack([remove_missing,lag_amount,training_percent])], justify="start", gap=5)}
-    """)
+    helper_context["base"] = get_model_base()
+    helper_context["csv"] = pgh_revenue_data.to_csv(index=False)
+    helper_context["cells"] = {
+        key: {"code": get_cells()[key], "output": output_text(get_outputs()[key])} for key in STARTER_CELLS
+    }
+    helper_context["settings"] = {
+        "column": column_choice.value, "lag": lag_amount.value,
+        "remove_missing": remove_missing.value, "training_share": training_share.value,
+    }
     return
 
 
 @app.cell
-def _(get_intro_dialog_loaded, mo):
-    mo.stop(not get_intro_dialog_loaded())
-    mo.md(f"""## Communicating Results
+def helper_chat(helper_context, helper_log, mo):
+    async def helper_reply(messages, config):
+        helper_log.append(messages[-1].content)
+        if not helper_context["base"]:
+            return "Connect your model at the top of the page (**Test connection**) to use the helper."
+        system = helper_system_prompt(helper_context["csv"], helper_context["cells"], helper_context["settings"])
+        history = [{"role": "system", "content": system}] + [{"role": m.role, "content": m.content} for m in messages]
+        try:
+            return await ask_model(helper_context["base"], history)
+        except ModelUnavailable as error:
+            return f"I can't reach your model right now. {error}"
 
-    You now have a predictive model for the city's revenue. How would you communicate these results back to Chris?""")
+    helper = mo.ui.chat(
+        helper_reply,
+        prompts=["What does a lag of 4 mean?", "How do I compare two columns row by row?", "What does this error mean?"],
+    )
+    return (helper,)
+
+
+@app.cell(hide_code=True)
+def helper_panel(get_prediction, helper, mo):
+    mo.stop(get_prediction() is None)
+    mo.vstack([
+        mo.Html("<h3 class='ss ss-task-title'>Ask the AI helper</h3>"
+                "<div class='ss ss-prompt'>Your model on CRCD can see the data, your code in the five cells, and "
+                "your current settings. Ask it to explain code, errors or ideas. It won't make your choices for "
+                "you.</div>"),
+        helper,
+    ])
     return
 
 
 @app.cell(hide_code=True)
-def _(mo, remove_missing, revenue_selector):
-    _ai_sources = ["claude", "chatgpt", "docling"]
-    is_ai_source = any(value in revenue_selector.value for value in _ai_sources)
+def observe_gate(get_prediction, get_runs, mo):
+    mo.stop(get_prediction() is None)
+    _waiting = [cell["title"] for key, cell in STARTER_CELLS.items() if get_runs()[key] == 0]
     (
-        mo.md("You elected not to remove missing values. This broke your model. Try removing those and seeing what you can come up with!").callout('warn')
-        if not remove_missing.value
-        else mo.md("Nice job! Parsing the data by hand or writing a script to do it for you may take longer, but it ensures that your results are accurate. Now think about how you'll present your findings to your boss.").callout('success')
-        if not is_ai_source
-        else mo.md(f"""You trained your model using **{revenue_selector.value}**, which is a column from an AI source! You need to think about how you are going to convey the accuracy of the data when you communicate your results back to Chris.""").callout("danger")
+        mo.Html(f"<p class='ss ss-gate'>Run every code cell at least once to continue to Stage 3. Still to run: "
+                f"{html.escape(', '.join(_waiting))}.</p>")
+        if _waiting
+        else mo.Html("<p class='ss ss-gate'>You've run every cell. Stage 3 is below.</p>")
     )
-    return (is_ai_source,)
-
-
-@app.cell
-def _(chat_3, mo, rdso_3):
-    mo.vstack([mo.md(rdso_3), chat_3]).callout()
     return
-
-
-@app.cell
-def _(mo, pgh_revenue_data):
-    # select the column names that start with "revenue_by"
-    _revenue_columns = [col for col in pgh_revenue_data.columns if col.lower().startswith('revenue by')]
-
-
-    # make marimo buttons for each of the values in the _revenue_columns list
-    revenue_selector = mo.ui.radio(
-        options=_revenue_columns,
-        value=_revenue_columns[0],  # sets default value to first column
-        label="Select Revenue Column"
-    )
-    return (revenue_selector,)
-
-
-@app.cell
-def _(mo):
-    remove_missing = mo.ui.switch(label="Remove missing values")
-    return (remove_missing,)
-
-
-@app.cell
-def _(mo):
-    training_percent = mo.ui.slider(start=0.1, stop=0.9, step=0.1, value=0.1, label="Training Set Percentage:")
-    return (training_percent,)
-
-
-@app.cell
-def _(mo):
-    lag_amount = mo.ui.slider(start=1, stop=5, step=1, value=1, label="Lag Amount:")
-    return (lag_amount,)
 
 
 if __name__ == "__main__":
