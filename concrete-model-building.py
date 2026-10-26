@@ -9,12 +9,56 @@ with app.setup:
     import html
     import json
     import sys
+    import textwrap
+    import urllib.request
 
     import matplotlib.pyplot as plt
     import pandas as pd
     from sklearn.linear_model import LinearRegression
     from sklearn.metrics import root_mean_squared_error
     from sklearn.model_selection import train_test_split
+
+    CRCD_STEPS = textwrap.dedent("""
+        **This scenario includes an AI helper that runs on your own model on Pitt's CRCD GPU cluster.** Setting it up takes about 15 minutes the first time (mostly the one-time model download) and about 3 minutes after that. You can do the whole data task without it; only the helper needs it.
+
+        **Before you begin**
+        - A CRCD account with an allocation on the `gpu` cluster. No allocation yet? Request one at [crc.pitt.edu/service-request-forms](https://crc.pitt.edu/service-request-forms).
+        - Be on **Wireless-PittNet** or connected to the **Pitt VPN**.
+        - Use **Chrome, Edge or Firefox**.
+
+        **1. Log in to CRCD and start a GPU session.** In a terminal: `ssh <pittID>@h2p.crc.pitt.edu`, then:
+        ```
+        srun -M gpu -p l40s -n1 -c16 --gres=gpu:1 -t 2:00:00 --pty bash
+        ```
+
+        **2. Choose the model and start the server.** Replace `<group>` with your CRCD group name:
+        ```
+        export LLAMACPP_MODEL="bartowski/Qwen2.5-32B-Instruct-GGUF:Q4_K_M"
+        export LLAMACPP_DOWNLOAD_DIR="/vast/<group>/$USER/llamacpp"
+        export LLAMACPP_EXTRA_ARGS="-c 16384"
+        module load llamacpp/0.5.0
+        ```
+        This is a 32-billion-parameter model compressed to about 20 GB. The first download takes a while; later sessions reuse the folder.
+
+        **3. Wait until it's ready.** Run `llamacpp-status` until it prints something like `READY - http://gpu-n80:27555`. The part after `http://` is your **node** (`gpu-n80`) and **port** (`27555`).
+
+        **4. On your own laptop, open a tunnel.** In a *new* terminal window on your laptop (not on CRCD), using your node and port:
+        ```
+        ssh -N -L 8080:<node>:<port> <pittID>@h2p.crc.pitt.edu
+        ```
+        It will look like nothing happens. That's normal. Leave this window open the whole time you work.
+
+        **5. Connect.** Keep the address below as `http://localhost:8080` and click **Test connection**. Your browser will ask whether this site may access other apps and devices on your network or computer. Click **Allow**. That lets this page talk to the tunnel.
+
+        **6. When you're finished,** type `exit` in the CRCD session. The GPU is billed for every minute you hold it, whether or not you're using it.
+
+        *Your model server has no password: other CRCD users could reach it while it runs, so stop it when you're done. This scenario only sends the city's public revenue data and your questions to it. Not working? You can also run this scenario on your laptop with `uv run marimo run concrete-model-building.py` (see the README).*
+
+        Sources: CRC [llama.cpp guide](https://crc-pages.pitt.edu/user-manual/applications/ai-ml/llamacpp/) · CRC [Inference servers on the GPU cluster](https://crc-pages.pitt.edu/user-manual/applications/ai-ml/inference-server/)
+    """)
+
+    class ModelUnavailable(Exception):
+        """The student's model server could not be reached or gave an unusable reply."""
 
 
 @app.function
@@ -137,14 +181,71 @@ def fooled_rows(data) -> list[dict]:
 
 
 
-@app.cell
-async def _():
-    import sys
-    if "pyodide" in sys.modules:
-        # browser (WASM) build: the groq client isn't bundled, install it at load time
-        import micropip
-        await micropip.install("groq")
-    return
+@app.function
+def normalize_base_url(text: str) -> str:
+    url = text.strip()
+    if url and "://" not in url:
+        url = "http://" + url
+    url = url.rstrip("/")
+    if url.endswith("/v1"):
+        url = url[: -len("/v1")]
+    return url.rstrip("/")
+
+
+@app.function
+def in_browser() -> bool:
+    return "pyodide" in sys.modules
+
+
+@app.function
+def urllib_request(url: str, payload: dict | None) -> dict:
+    data = json.dumps(payload).encode() if payload is not None else None
+    request = urllib.request.Request(
+        url, data=data, headers={"Content-Type": "application/json"}, method="POST" if data else "GET"
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        return json.loads(response.read())
+
+
+@app.function
+async def model_request(url: str, payload: dict | None = None) -> dict:
+    """GET (no payload) or POST JSON to the student's model server: browser fetch in WASM, urllib locally."""
+    try:
+        if in_browser():
+            from pyodide.http import pyfetch
+
+            options = {"method": "POST", "headers": {"Content-Type": "application/json"},
+                       "body": json.dumps(payload)} if payload is not None else {}
+            response = await pyfetch(url, **options)
+            if not response.ok:
+                raise ModelUnavailable(f"Your model server answered with an error (HTTP {response.status}).")
+            return await response.json()
+        return await asyncio.to_thread(urllib_request, url, payload)
+    except ModelUnavailable:
+        raise
+    except Exception as error:
+        raise ModelUnavailable(
+            f"Couldn't reach your model ({type(error).__name__}). Check that the SSH tunnel window is still open "
+            "and that the server shows READY."
+        ) from error
+
+
+@app.function
+async def list_model_name(base: str) -> str:
+    body = await model_request(f"{base}/v1/models")
+    try:
+        return body["data"][0]["id"]
+    except (KeyError, IndexError, TypeError) as error:
+        raise ModelUnavailable("The server answered, but not like a llama.cpp model server.") from error
+
+
+@app.function
+async def ask_model(base: str, messages: list[dict]) -> str:
+    body = await model_request(f"{base}/v1/chat/completions", {"messages": messages, "temperature": 0.3})
+    try:
+        return body["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as error:
+        raise ModelUnavailable("The model answered in an unexpected format.") from error
 
 
 @app.cell
@@ -159,30 +260,53 @@ def _(mo):
     return get_intro_dialog_loaded, set_intro_dialog_loaded
 
 
+@app.cell
+def model_state(mo):
+    get_model_base, set_model_base = mo.state("")
+    get_model_status, set_model_status = mo.state(("idle", ""))
+    return get_model_base, get_model_status, set_model_base, set_model_status
+
+
+@app.cell
+def connect_inputs(mo):
+    model_url = mo.ui.text(value="http://localhost:8080", label="Model address", full_width=True)
+    test_button = mo.ui.run_button(label="Test connection", kind="success")
+    return model_url, test_button
+
+
+@app.cell
+async def test_connection(model_url, set_model_base, set_model_status, test_button):
+    if test_button.value:
+        _base = normalize_base_url(model_url.value)
+        try:
+            _name = await list_model_name(_base)
+            set_model_base(_base)
+            set_model_status(("ok", _name))
+        except ModelUnavailable as _error:
+            set_model_base("")
+            set_model_status(("error", str(_error)))
+    return
+
+
 @app.cell(hide_code=True)
-def _(mo):
-    input_key = mo.ui.text(label="Groq AI API key", kind="password")
+def connect_panel(get_model_status, mo, model_url, test_button):
+    _state, _detail = get_model_status()
+    _note = {
+        "ok": mo.md(f"**Connected:** `{_detail}`. The AI helper is ready.").callout("success"),
+        "error": mo.md(f"**Not connected.** {_detail}").callout("warn"),
+    }.get(_state, "")
     mo.vstack([
-        mo.md("""
-        ### Before you start: get your free Groq API key
-        This scenario includes an AI tutor that asks you follow-up questions. To use it, you need your own free key from Groq, an AI service. It takes about 2 minutes.
-
-        1. Go to **[console.groq.com/keys](https://console.groq.com/keys)** and sign up. A Google or GitHub account works.
-        2. Click **Create API Key**, give it any name (e.g. "ConCReTE"), and click **Submit**.
-        3. **Copy the key right away.** Groq shows it only once. It starts with `gsk_`.
-        4. Paste it into the **Groq AI API key** box below and press **Enter**.
-
-        **Keep your key private.** Don't share it or post it anywhere. Your key stays in your browser and is only sent to Groq. What you type in the chat is sent to Groq to generate replies, so don't include personal information.
-
-        *No key? You can still do the whole data science task. Only the AI tutor won't respond.*
-        """).callout("info"),
-        input_key,
+        mo.md("## Before you start: connect your AI model"),
+        mo.md(CRCD_STEPS),
+        model_url,
+        test_button,
+        _note,
     ])
-    return (input_key,)
+    return
 
 
 @app.cell(hide_code=True)
-def _(input_key, mo, set_intro_dialog_loaded):
+def _(mo, set_intro_dialog_loaded):
     context = """
         # **ConCReTE: City of Pittsburgh Module**
         ---
@@ -508,13 +632,13 @@ def _(chat_3, mo, rdso_3):
 @app.cell
 def _(mo, pgh_revenue_data):
     # select the column names that start with "revenue_by"
-    revenue_columns = [col for col in pgh_revenue_data.columns if col.lower().startswith('revenue by')]
+    _revenue_columns = [col for col in pgh_revenue_data.columns if col.lower().startswith('revenue by')]
 
 
-    # make marimo buttons for each of the values in the revenue_columns list
+    # make marimo buttons for each of the values in the _revenue_columns list
     revenue_selector = mo.ui.radio(
-        options=revenue_columns,
-        value=revenue_columns[0],  # sets default value to first column
+        options=_revenue_columns,
+        value=_revenue_columns[0],  # sets default value to first column
         label="Select Revenue Column"
     )
     return (revenue_selector,)
