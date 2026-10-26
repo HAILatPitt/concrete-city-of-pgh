@@ -165,6 +165,8 @@ with app.setup:
         "color:var(--ink)}"
         ".poee-eval .ev{background:#fff;border:1px solid var(--rule);border-top:3px solid #d97706;padding:16px 20px;margin:14px 0}"
         ".poee-eval .ev.harm{border-top-color:#b91c1c}"
+        ".poee-eval .ev.reveal{border-top-color:#003594}"
+        ".poee-eval .num{white-space:nowrap}"
         ".poee-eval h3{font:500 19px/1.25 var(--serif);color:var(--ink);margin:0 0 12px;padding:0;border:0}"
         ".poee-eval .trail{display:flex;gap:8px;margin-bottom:10px}"
         ".poee-eval .trail div{flex:1;padding:8px 10px;font:400 13px/1.4 var(--sans);background:var(--wash)}"
@@ -323,6 +325,78 @@ with app.setup:
         "Write a short note to Chris: your forecast, how confident he should be in it, and why.",
     ]
 
+    SOUND_COLUMNS = ("revenue by hand", "revenue by claude chat", "revenue by claude api", "revenue by pypdf")
+    SOUND_COLUMN_TEXT = (
+        "By hand, Claude chat, Claude API or pypdf. They agree on every quarter except 2017 Q2, where all four "
+        "machine methods record $113,830,377 and the hand-typed value is $113,830,337."
+    )
+    COLUMN_VERDICTS = {
+        "revenue by docling": {
+            "why": "Docling read 2018 Q4 as $6,425 (the other sources say $95.4 million) and 2021 Q4 as $608.6 "
+                   "million (the others say $129.7 million). It is also missing every quarter of 2013, 2017 and 2024.",
+            "cost": "Your model learned from a quarter where the city seemingly collected almost nothing, and from "
+                    "another four times its real size. The error figure can't show this, because those quarters fall "
+                    "in the years the model trains on, not the years it is tested on. A budget built on this forecast "
+                    "rests on numbers nobody checked.",
+        },
+        "revenue by chatgpt": {
+            "why": "ChatGPT misread three quarters of 2019 (for example $12.9 million where the reports say $122.2 million) "
+                   "and is missing every quarter of 2013, 2014, 2022 and 2024.",
+            "cost": "This column also gives the lowest error of all six, so it looks like the best choice. Chris would "
+                    "be told the forecast is more reliable than it is, and the city could plan spending around "
+                    "revenue that was never there.",
+        },
+        None: {
+            "why": "You didn't choose a column, so no model was built.",
+            "cost": "Chris would have no forecast to plan with. Choosing which numbers to trust is the first decision "
+                    "in this task.",
+        },
+    }
+    MISSING_VERDICT = {
+        "sound": "Remove rows with missing values, after checking which quarters they are.",
+        "why": "A linear regression can't train on blank quarters, so with missing values kept the model produced no "
+               "error figure and no forecast.",
+        "cost": "With nothing to hand Chris, someone ends up filling the blanks by guessing, which is how unchecked "
+                "numbers slip into a budget.",
+    }
+    LAG_VERDICT = {
+        "sound": "A lag of 4: each quarter is predicted from the same quarter a year earlier.",
+        "why": "City revenue follows a yearly pattern: Q1 averages $214.9 million, against $104 to $132 million for "
+               "the other quarters. Other lags compare unlike quarters. For the hand-typed column, lag 4 roughly "
+               "halves the error ($85.6 million at lag 2, $42.2 million at lag 4).",
+        "cost": "The forecast would miss the seasonal swing, predicting a quiet quarter after a busy Q1 and a busy one "
+                "after a quiet quarter, so cash planning would be wrong in both directions.",
+    }
+    SPLIT_VERDICTS = {
+        "small": {
+            "why": "Training on so little history leaves the model only a handful of quarters to learn from. Its "
+                   "error can still look good (at 10%, the hand-typed column scores $27.9 million after learning "
+                   "from just 4 quarters), but that is luck, not skill.",
+            "cost": "Chris would get a forecast that looks well tested but rests on a year or two of history.",
+        },
+        "large": {
+            "why": "Training on 90% leaves only about 5 quarters to test on, so the error figure depends on which "
+                   "quarters happen to be last (the hand-typed column scores $11.7 million).",
+            "cost": "The error figure would make the forecast sound far more reliable than it is.",
+        },
+        "sound": "50% to 80%: enough quarters to learn from, and enough recent quarters to test on.",
+    }
+    REVEALS = {
+        "compare": "Averages hide single bad values. Docling records 2018 Q4 as $6,425 instead of $95.4 million, and "
+                   "ChatGPT misreads 2019, for example $12.9 million instead of $122.2 million. Only a "
+                   "row-by-row comparison shows them.",
+        "plot": "Plotting every column shows spikes and drops no real budget has, and a pattern that repeats every "
+                "year: Q1 is by far the biggest quarter. That pattern is why a lag of 4, the same quarter last year, "
+                "works best.",
+        "truth": "On 2017 Q2 all five machine methods record $113,830,377, and only the hand-typed value differs "
+                 "($113,830,337). The person most likely made the typo. No source is automatically the truth.",
+        "missing": "The blanks aren't random. Docling and ChatGPT miss whole years, so dropping missing rows quietly "
+                   "removes years from the time series, and a year-ago comparison then lines up the wrong quarters.",
+        "split": "A random split mixes later quarters into training, so the model is partly tested on the past it "
+                 "has already seen around. Its $29.0 million error looks better than the honest chronological "
+                 "$42.2 million only because the test got easier.",
+    }
+
     class ModelUnavailable(Exception):
         """The student's model server could not be reached or gave an unusable reply."""
 
@@ -434,7 +508,7 @@ def fooled_rows(data) -> list[dict]:
         ("Hand-typed column, lag 4, 80% training", chronological_rmse(data, "revenue by hand", 4, 0.8),
          "A sensible model, tested on the most recent quarters."),
         ("ChatGPT column, lag 2, 80% training", chronological_rmse(data, "revenue by chatgpt", 2, 0.8),
-         "The lowest error of any column, yet this column drops digits and misses whole years. Its errors sit in "
+         "The lowest error of any column, yet this column misreads several quarters and misses whole years. Its errors sit in "
          "the years the model learns from, and its test covers different quarters, so the score can't show them."),
         ("Hand-typed column, lag 4, 10% training", chronological_rmse(data, "revenue by hand", 4, 0.1),
          "The model learned from only 4 quarters. The low error is luck, not skill."),
@@ -680,6 +754,138 @@ def run_and_record(editor, data, set_outputs, set_runs, key: str, _value=None) -
 @app.function
 def can_submit(fields: dict) -> bool:
     return all(fields.get(f"r{i}", "").strip() for i in range(1, len(EXPLAIN_PROMPTS) + 1))
+
+
+@app.function
+def column_card(column: str | None) -> dict | None:
+    if column in SOUND_COLUMNS:
+        return None
+    verdict = COLUMN_VERDICTS[column]
+    return {"setting": "column", "title": "Which numbers you trusted",
+            "chose": METHOD_LABELS.get(column, "No column chosen"), "sound": SOUND_COLUMN_TEXT, **verdict}
+
+
+@app.function
+def split_card(train_share: float) -> dict | None:
+    share = round(train_share, 1)
+    if 0.5 <= share <= 0.8:
+        return None
+    verdict = SPLIT_VERDICTS["small" if share < 0.5 else "large"]
+    return {"setting": "split", "title": "How much history you trained on", "chose": f"{share:.0%} for training",
+            "sound": SPLIT_VERDICTS["sound"], **verdict}
+
+
+@app.function
+def settings_cards(column: str | None, lag: int, drop_missing: bool, train_share: float) -> list[dict]:
+    cards = [column_card(column)]
+    if not drop_missing:
+        cards.append({"setting": "missing", "title": "Missing values", "chose": "Kept the blank quarters", **MISSING_VERDICT})
+    if lag != 4:
+        cards.append({"setting": "lag", "title": "How far back the model looks", "chose": f"A lag of {lag}", **LAG_VERDICT})
+    cards.append(split_card(train_share))
+    return [card for card in cards if card]
+
+
+@app.function
+def reveal_cards(cells: dict, runs: dict) -> list[dict]:
+    return [
+        {"key": key, "title": cell["title"], "finding": REVEALS[key],
+         "edited": cells.get(key, cell["code"]).strip() != cell["code"].strip(), "ran": runs.get(key, 0) > 0}
+        for key, cell in STARTER_CELLS.items()
+    ]
+
+
+@app.function
+def settings_card_html(card: dict) -> str:
+    return (
+        f"<div class=\"ev\"><h3>{html.escape(card['title'])}</h3>"
+        f"<div class='trail'><div><span class='k'>You chose</span><b>{html.escape(card['chose'])}</b></div>"
+        f"<div class='ok'><span class='k'>A sound choice</span>{html.escape(card['sound'])}</div></div>"
+        f"<div class='why'><b>Why.</b> {html.escape(card['why'])}</div>"
+        f"<div class='cost'><b>What happens for the city.</b> {html.escape(card['cost'])}</div></div>"
+    )
+
+
+@app.function
+def reveal_card_html(card: dict) -> str:
+    fact = "You changed the starter code." if card["edited"] else "You ran the starter code as given."
+    return (
+        f"<div class=\"ev reveal\"><h3>{html.escape(card['title'])}</h3>"
+        f"<div class='why'>{html.escape(card['finding'])}</div>"
+        f"<div class='also'>{fact}</div></div>"
+    )
+
+
+@app.function
+def fooled_table_html(data) -> str:
+    rows = "".join(
+        f"<tr><td>{html.escape(r['setting'])}</td><td class='num'>${r['reported_rmse_m']:.1f}M</td>"
+        f"<td>{html.escape(r['what_is_going_on'])}</td></tr>"
+        for r in fooled_rows(data)
+    )
+    return ("<table class='ss-sheet'><tr><th>Setting</th><th>Reported error</th><th>What's really going on</th></tr>"
+            f"{rows}</table>")
+
+
+@app.function
+def evaluation_html(data, settings: dict, cells: dict, runs: dict) -> str:
+    cards = settings_cards(settings["column"], settings["lag"], settings["remove_missing"], settings["training_share"])
+    part1 = "".join(settings_card_html(c) for c in cards) or (
+        "<div class='sum'><div class='big'>Every setting holds up.</div></div>"
+    )
+    part3 = "".join(reveal_card_html(c) for c in reveal_cards(cells, runs))
+    return (
+        f"<style>{PALETTE}</style>{EVAL_STYLE}<div class='ss poee-eval'>"
+        f"<div class='grp'>Part 1 · Your forecast settings</div>{part1}"
+        "<div class='grp'>Part 2 · The number that fooled you</div>"
+        "<div class='sum'><div class='why'>A lower error is not proof of a better forecast. These settings all "
+        "\"score\" well for the wrong reasons:</div>"
+        f"{fooled_table_html(data)}</div>"
+        f"<div class='grp'>Part 3 · What the data was hiding</div>{part3}</div>"
+    )
+
+
+@app.function
+def forecast_summary(data, settings: dict) -> str:
+    if not settings["column"]:
+        return "No column chosen, so no model."
+    try:
+        score = score_model(build_lagged(data, settings["column"], settings["lag"], settings["remove_missing"]),
+                            settings["training_share"])
+    except ValueError as error:
+        return str(error)
+    forecast = next_quarter_forecast(data, settings["column"], settings["lag"])
+    told = (f"Forecast for {forecast['label']}: ${forecast['value']:,.0f}." if forecast
+            else "No forecast possible: " + forecast_unavailable_reason(data, settings["column"], settings["lag"]))
+    return f"Error (RMSE) ${score['rmse']:,.0f} on {score['test_rows']} test quarters. {told}"
+
+
+@app.function
+def report_html(data, prediction: dict, settings: dict, explain: dict, helper_log: list, cells: dict, runs: dict) -> str:
+    answers = "".join(
+        f"<h3>{i}. {html.escape(q)}</h3><p>{paragraph_html(explain.get(f'r{i}', ''))}</p>"
+        for i, q in enumerate(EXPLAIN_PROMPTS, 1)
+    )
+    questions = "".join(f"<li>{html.escape(q)}</li>" for q in helper_log) or "<li><i>(none)</i></li>"
+    chosen = (f"{METHOD_LABELS.get(settings['column'], 'no column')} · lag {settings['lag']} · missing values "
+              f"{'removed' if settings['remove_missing'] else 'kept'} · {settings['training_share']:.0%} training")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Revenue Forecast Brief</title>
+<style>body {{ font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }}
+th, td {{ padding: 4px 8px; vertical-align: top; border-bottom: 1px solid #ddd; text-align: left; }}</style></head><body>
+<h1>Revenue Forecast Brief</h1>
+<p><b>Scenario:</b> City of Pittsburgh quarterly revenue forecast</p>
+<h2>Prediction (locked before seeing the data)</h2>
+{locked_prediction_html(prediction)}
+<h2>Forecast</h2>
+<p><b>Settings:</b> {html.escape(chosen)}<br>{html.escape(forecast_summary(data, settings))}</p>
+<h2>Reflection and note to Chris</h2>
+{answers}
+<h2>Questions asked to the AI helper</h2>
+<ul>{questions}</ul>
+<h2>Evaluation</h2>
+{evaluation_html(data, settings, cells, runs)}
+</body></html>"""
 
 
 @app.cell(hide_code=True)
@@ -1163,6 +1369,47 @@ def explain(
             submit_warning,
         ])
     _output
+    return
+
+
+@app.cell(hide_code=True)
+def evaluate(
+    column_choice,
+    get_cells,
+    get_runs,
+    get_submitted,
+    lag_amount,
+    mo,
+    pgh_revenue_data,
+    remove_missing,
+    training_share,
+):
+    mo.stop(not get_submitted())
+    final_settings = {
+        "column": column_choice.value, "lag": lag_amount.value,
+        "remove_missing": remove_missing.value, "training_share": training_share.value,
+    }
+    mo.vstack([
+        mo.Html(stage_header_html(4)),
+        mo.Html("<div class='ss ss-prompt'>Here is how your forecast holds up. Part 1 covers only the settings worth "
+                "a second look. Part 2 shows why the error number alone can mislead. Part 3 shows what each code "
+                "cell could reveal.</div>"),
+        mo.Html(evaluation_html(pgh_revenue_data, final_settings, get_cells(), get_runs())),
+    ])
+    return (final_settings,)
+
+
+@app.cell(hide_code=True)
+def download_brief(final_settings, get_cells, get_explain, get_prediction, get_runs, helper_log, mo, pgh_revenue_data):
+    _doc = report_html(pgh_revenue_data, get_prediction(), final_settings, get_explain(), helper_log, get_cells(), get_runs())
+    mo.vstack([
+        mo.Html("<h3 class='ss ss-task-title'>Download your brief</h3>"),
+        mo.md("The file holds your prediction, your forecast, your reflection, your questions to the helper and "
+              "this evaluation. It opens in any browser; use **Print → Save as PDF** for a PDF."),
+        mo.download(data=_doc.encode("utf-8"), filename="revenue-forecast-brief.html", mimetype="text/html",
+                    label="Download brief (.html)"),
+        mo.md("*Nothing is saved online. Refreshing or closing this page erases your work, so download before you leave.*"),
+    ])
     return
 
 
