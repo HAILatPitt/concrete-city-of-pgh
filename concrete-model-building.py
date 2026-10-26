@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.18.0"
-app = marimo.App(width="compact", app_title="ConCReTE Model Building")
+app = marimo.App(width="medium", app_title="ConCReTE Model Building")
 
 with app.setup:
     import ast
@@ -71,124 +71,175 @@ with app.setup:
     """)
 
     FONT_LINK = (
-        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Libre+Franklin:"
-        "wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap'>"
+        "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700"
+        "&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap'>"
     )
-    # Pitt navy is the case's ink; Pitt gold marks what the learner adds. Cool hue-260 neutrals.
+    # An investigation's palette: navy ink, pink only for what deserves a second look, tan for metadata.
     PALETTE = (
-        ".ss{--gold:#FFB81C;--navy:#003594;--navy-dk:#003163;--ink:oklch(0.24 0.012 260);"
-        "--mid:oklch(0.47 0.010 260);--rule:oklch(0.86 0.006 260);--wash:oklch(0.975 0.004 260);"
-        "--sans:'Libre Franklin','PT Sans',sans-serif;--serif:'Lora',Georgia,serif;"
-        "color:var(--ink);font-family:var(--sans)}"
+        ".ss{--ink:#242a49;--pink:#ff335f;--pink-lt:#fbd7de;--crimson:#801930;--tan:#66615b;--tan-lt:#f3f2f1;"
+        "--rule:#c2c0bd;--slate:#7b89a1;--serif:'Newsreader',Georgia,serif;"
+        "--sans:'Hanken Grotesk',system-ui,sans-serif;"
+        "--dots:radial-gradient(circle,#242a49 .9px,transparent 1.2px) 0 0/3px 3px;"
+        "color:var(--ink);font-family:var(--serif)}"
     )
-    # Card faces render inside the marimo button's shadow root, so they carry their own styles.
+    # The cards render inside the marimo button's shadow root, so they carry their own styles, and the
+    # button rule below reaches only that one button. Its open/closed look comes from custom properties
+    # set on the slot outside (card_slot_style), which inherit into the shadow root.
     CARD_STYLE = (
-        ".ss-card{box-sizing:border-box;width:224px;height:300px;overflow:hidden;background:#fff;"
-        "border:1px solid var(--rule);border-radius:2px;display:flex;flex-direction:column;text-align:left;"
-        "white-space:normal;font-weight:400;box-shadow:0 1px 0 var(--rule),0 8px 18px -14px rgba(0,49,99,.35);"
-        "animation:ss-flip .4s cubic-bezier(.2,.7,.3,1) both}"
-        ".ss-card:hover{border-color:var(--gold)}"
-        ".ss-front-face{display:var(--ss-front,flex)}.ss-back-face{display:var(--ss-back,none)}"
-        "@keyframes ss-flip{from{transform:rotateY(90deg);opacity:.4}to{transform:rotateY(0);opacity:1}}"
-        ".ss-band,.ss-band-b{display:flex;align-items:center;justify-content:center;"
-        "font:600 12px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase}"
-        ".ss-band{height:54px;background:var(--navy);color:#fff}"
-        ".ss-band-b{height:40px;margin-top:auto;background:var(--gold);color:var(--navy-dk)}"
-        ".ss-front-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;"
-        "text-align:center;padding:0 20px}"
-        ".ss-numeral{font:italic 400 22px/1 var(--serif);color:var(--navy)}"
-        ".ss-front-title{font:500 24px/1.15 var(--serif);color:var(--ink);margin-top:10px}"
-        ".ss-hair{width:28px;height:2px;background:var(--gold);margin:14px auto 0}"
-        ".ss-back{padding:18px 18px 14px}"
-        ".ss-back-head{display:flex;align-items:baseline;justify-content:space-between;"
-        "border-bottom:2px solid var(--navy);padding-bottom:7px}"
-        ".ss-back-head b{font:500 16px/1.1 var(--serif);color:var(--ink)}"
-        ".ss-back-head i{font:italic 400 15px/1 var(--serif);color:var(--navy)}"
-        ".ss-back-text{display:block;font:400 13px/1.45 var(--sans);color:var(--ink);margin:9px 0 0;hyphens:auto}"
-        ".ss-back-text::first-letter{font:500 30px/.8 var(--serif);float:left;color:var(--navy);margin:3px 4px 0 0}"
+        "button{display:block!important;width:100%!important;height:auto!important;padding:0!important;"
+        "border:0!important;background:none!important;box-shadow:none!important;text-align:left!important;"
+        "white-space:normal!important;font-weight:400!important}"
+        ".ss-ex{position:relative;isolation:isolate;padding:0 12px 12px 0}"
+        ".ss-ex::before{content:'';position:absolute;left:12px;top:12px;right:0;bottom:0;background:var(--dots);"
+        "opacity:calc(var(--ss-open,0) * .55);z-index:-1;transition:opacity .15s}"
+        ".ss-ex-card{display:grid;grid-template-columns:64px 1fr 150px;column-gap:24px;align-items:start;"
+        "background:#fff;border:1px solid var(--ink);padding:24px 28px;transition:transform .15s;"
+        "transform:translate(calc(var(--ss-open,0) * -4px),calc(var(--ss-open,0) * -4px))}"
+        "button:hover .ss-ex-card{transform:translate(-4px,-4px)}button:hover .ss-ex::before{opacity:.55}"
+        ".ss-ex-num{font:italic 400 40px/1 var(--serif);color:var(--ink)}"
+        ".ss-ex-title{font:600 25px/1.2 var(--serif);color:var(--ink);margin:0 0 6px}"
+        ".ss-ex-short{font:400 17px/1.55 var(--serif);color:var(--ink)}"
+        ".ss-ex-cue{justify-self:end;align-self:center;display:flex;align-items:center;gap:10px;white-space:nowrap;"
+        "font:600 14px/1 var(--sans);color:var(--ink)}"
+        ".ss-cue-closed{display:var(--ss-cue-closed,inline)}.ss-cue-open{display:var(--ss-cue-open,none)}"
+        ".ss-ex-cue i{width:20px;height:20px;border:1.5px solid var(--ink);border-radius:50%;"
+        "background:linear-gradient(var(--ink),var(--ink)) center/9px 1.5px no-repeat,"
+        "linear-gradient(var(--ink),var(--ink)) center/1.5px var(--ss-plus,9px) no-repeat}"
+        ".ss-ex-full{grid-column:2 / 4;display:var(--ss-full,none);margin-top:18px;padding-top:18px;"
+        "border-top:1px solid var(--rule);columns:2;column-gap:36px;font:400 16px/1.6 var(--serif);color:var(--ink)}"
+        "@media (max-width:700px){.ss-ex-card{grid-template-columns:36px 1fr;padding:18px}"
+        ".ss-ex-cue{grid-column:2;justify-self:start;margin-top:12px}.ss-ex-full{grid-column:1 / 3;columns:1}}"
     )
-    # marimo's button is a fixed-height inline-flex; centring it in a card-height flex slot lets the
-    # card overflow it symmetrically and sit in normal flow. The card's -9px margin covers the button's
-    # 7.2px side padding and 1px border. ponytail: tied to marimo 0.17.7's button box; re-check on upgrade.
-    CARD_SLOT = {"display": "flex", "align-items": "center", "justify-content": "center", "height": "300px"}
-    # Page-level blocks (light DOM), injected once by the title cell.
+    # Page-level blocks (light DOM), injected once by the title cell and again in the downloaded brief.
     BRIEF_STYLE = (
-        ".ss-kicker{font:600 12px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--navy)}"
-        ".ss-title{font:500 42px/1.1 var(--serif);letter-spacing:-.01em;margin:10px 0 30px;color:var(--ink)}"
-        ".ss-gate{margin:18px 0 0;text-align:center;font:italic 400 15px/1.4 var(--serif);color:var(--mid)}"
-        ".ss-gate::before,.ss-gate::after{content:'';display:inline-block;width:36px;height:1px;"
-        "background:var(--rule);vertical-align:middle;margin:0 12px}"
-        ".ss-stage{margin-top:40px}"
-        ".ss-runhead{display:flex;justify-content:space-between;font:600 12px/1 var(--sans);letter-spacing:.14em;"
-        "text-transform:uppercase;color:var(--mid);border-top:2px solid var(--navy-dk);padding-top:9px}"
-        ".ss-runhead span:first-child{color:var(--navy)}"
-        ".ss-stage-title{font:500 34px/1.1 var(--serif);margin:18px 0 0;padding:0;border:0;color:var(--ink)}"
-        ".ss-stage-title em{font-style:italic;color:var(--navy)}"
-        ".ss-steps{display:flex;gap:18px;margin-top:12px;font:400 13px/1 var(--sans);color:var(--mid)}"
-        ".ss-step.now{color:var(--ink);font-weight:600;border-bottom:2px solid var(--gold);padding-bottom:3px}"
-        ".ss-prompt{margin-top:22px;background:var(--wash);border-top:1px solid var(--rule);"
-        "border-bottom:1px solid var(--rule);padding:18px 22px;font:400 16px/1.6 var(--serif);color:var(--ink)}"
-        ".ss-prompt .n{font-style:italic;color:var(--navy)}"
+        ".ss-lab{font:600 13px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--tan);margin:0}"
+        ".ss-lab.cr{color:var(--crimson)}"
+        ".ss-swy{display:flex;align-items:center;gap:8px}"
+        ".ss-swy::before{content:'';width:22px;height:4px;background:var(--pink)}"
+        ".ss-mast{display:flex;justify-content:space-between;align-items:baseline;gap:24px;"
+        "border-bottom:1px solid var(--rule);padding-bottom:12px;margin-bottom:44px}"
+        ".ss-hero{display:grid;grid-template-columns:1fr 300px;column-gap:56px;align-items:end;margin-bottom:28px}"
+        ".ss-kicker{display:flex;align-items:center;gap:10px;font:600 15px/1 var(--sans);color:var(--crimson);"
+        "margin:0 0 18px}"
+        ".ss-kicker::before{content:'';width:10px;height:10px;background:var(--pink)}"
+        ".ss-title{font:500 66px/1.02 var(--serif);letter-spacing:-.015em;margin:0;padding:0;border:0;color:var(--ink)}"
+        ".ss-byline{font:400 15px/1.5 var(--sans);color:var(--tan);border-top:1px solid var(--ink);"
+        "padding-top:14px;margin:0}"
+        ".ss-byline b{color:var(--ink);font-weight:600}"
+        ".ss-sources{list-style:none;margin:10px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;"
+        "gap:4px 18px;font:400 15px/1.5 var(--sans);color:var(--ink)}"
+        ".ss-sources li::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;"
+        "background:var(--slate);margin-right:8px;vertical-align:2px}"
+        ".ss-gate{margin:20px 0 0;text-align:center;font:500 15px/1.4 var(--sans);color:var(--tan)}"
+        ".ss-gate::before{content:'\\2022\\2002\\2022\\2002\\2022\\2002\\2022';display:block;"
+        "letter-spacing:.2em;color:var(--ink);font-size:20px;margin-bottom:10px}"
+        ".ss-stage{border-top:4px solid var(--ink);padding-top:20px;margin-top:64px}"
+        ".ss-stage-top{display:flex;justify-content:space-between;align-items:baseline}"
+        ".ss-stage-title{font:500 52px/1.05 var(--serif);letter-spacing:-.01em;margin:10px 0 0;padding:0;border:0;"
+        "color:var(--ink)}"
+        ".ss-progress{list-style:none;margin:28px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,1fr);"
+        "position:relative}"
+        ".ss-progress::before{content:'';position:absolute;left:6px;right:calc(25% - 6px);top:6px;height:1px;"
+        "background:var(--rule)}"
+        ".ss-progress li{position:relative;padding-top:26px;font:400 15px/1.3 var(--sans);color:var(--tan);margin:0}"
+        ".ss-progress li::before{content:'';position:absolute;left:0;top:0;width:11px;height:11px;border-radius:50%;"
+        "border:1.5px solid var(--tan);background:#fff}"
+        ".ss-progress li b{display:block;font:600 13px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase}"
+        ".ss-progress .done{color:var(--ink)}"
+        ".ss-progress .done::before{background:var(--ink);border-color:var(--ink)}"
+        ".ss-progress .now{color:var(--ink);font-weight:600}"
+        ".ss-progress .now::before{background:var(--pink);border-color:var(--pink);width:15px;height:15px;"
+        "top:-2px;left:-2px}"
+        ".ss-prompt{margin-top:28px;max-width:800px;font:400 19px/1.55 var(--serif);color:var(--ink)}"
         ".ss-prompt strong{font-weight:600}"
-        ".ss-prompt ul,.ss-prompt ol{margin:10px 0 12px 22px;padding:0;list-style:disc}"
-        ".ss-prompt li{margin:5px 0;padding-left:2px}"
-        ".ss-label{display:grid;grid-template-columns:34px 1fr;align-items:baseline;margin:22px 0 8px}"
-        ".ss-label i{font:italic 400 20px/1 var(--serif);color:var(--navy)}"
-        ".ss-label span{font:600 14px/1.35 var(--sans);color:var(--ink)}"
-        ".ss-indent{padding-left:34px}"
-        ".ss-locked{margin-top:22px;background:var(--wash);border-top:2px solid var(--navy-dk);"
-        "border-bottom:1px solid var(--rule);padding:14px 22px 18px}"
-        ".ss-locked-head{font:600 12px/1 var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--navy)}"
-        ".ss-locked h4{font:italic 500 16px/1.3 var(--serif);color:var(--ink);margin:14px 0 4px}"
-        ".ss-locked p{font:400 15px/1.55 var(--sans);margin:0}"
-        ".ss-task-title{font:500 24px/1.2 var(--serif);color:var(--ink);margin:34px 0 12px;padding:0;border:0}"
-        ".ss-brief{background:var(--wash);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);"
-        "padding:16px 22px 18px;font:400 14px/1.6 var(--sans);color:var(--ink)}"
-        ".ss-brief p{margin:0 0 10px}"
-        ".ss-brief table{width:100%;border-collapse:collapse;margin:6px 0 0;font-size:13.5px}"
-        ".ss-brief th,.ss-brief td{text-align:left;vertical-align:top;padding:7px 10px 7px 0;"
-        "border-bottom:1px solid var(--rule)}"
-        ".ss-brief th{font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--navy);"
-        "border-bottom:2px solid var(--navy)}"
-        ".ss-brief td:first-child{white-space:nowrap;padding-right:18px}"
-        ".ss-note{margin:16px 0 0;background:#fff8e6;border-top:2px solid var(--gold);padding:12px 18px;"
-        "font:400 14px/1.55 var(--sans);color:var(--ink)}"
-        ".ss-note.ok{background:#ecfdf5;border-top-color:#15803d}"
-        ".ss-sheet{width:100%;border-collapse:collapse;font:400 13.5px/1.45 var(--sans);color:var(--ink)}"
-        ".ss-sheet th{text-align:left;font:600 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;"
-        "color:var(--navy);border-bottom:2px solid var(--navy);padding:8px 10px 8px 0}"
-        ".ss-sheet td{text-align:left;vertical-align:top;padding:7px 10px 7px 0;border-bottom:1px solid var(--rule)}"
-        ".ss-sheet .grp td{font:600 12px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--mid);"
-        "padding-top:18px;border-bottom:1px solid var(--navy-dk)}"
-        ".ss-sheet .inc td{background:#ecfdf5}"
-        ".ss-sheet .muted{color:var(--mid);font-style:italic}"
+        ".ss-prompt ul{list-style:none;counter-reset:q;margin:20px 0;padding:26px 30px;background:var(--tan-lt);"
+        "display:grid;grid-template-columns:1fr 1fr;gap:18px 40px}"
+        ".ss-prompt li{counter-increment:q;display:grid;grid-template-columns:34px 1fr;font-size:17px;"
+        "line-height:1.5;margin:0}"
+        ".ss-prompt li::before,.ss-label i{content:counter(q);display:grid;place-items:center;width:24px;height:24px;"
+        "border:1.5px solid var(--ink);border-radius:50%;font:700 13px/1 var(--sans);font-style:normal;margin-top:2px}"
+        ".ss-label{display:grid;grid-template-columns:40px 1fr;align-items:start;margin:28px 0 10px}"
+        ".ss-label span{font:600 18px/1.4 var(--serif);color:var(--ink)}"
+        ".ss-indent{padding-left:40px}"
+        ".ss-exhibit{position:relative;isolation:isolate;margin-top:32px;padding:0 12px 12px 0}"
+        ".ss-exhibit::before{content:'';position:absolute;left:12px;top:12px;right:0;bottom:0;"
+        "background:var(--dots);opacity:.5;z-index:-1}"
+        ".ss-exhibit-in{background:#fff;border:1px solid var(--ink);padding:20px 26px 22px}"
+        ".ss-exhibit h4{font:italic 500 17px/1.3 var(--serif);color:var(--ink);margin:16px 0 4px}"
+        ".ss-exhibit p:not(.ss-lab){font:400 16px/1.55 var(--sans);color:var(--ink);margin:0}"
+        ".ss-task-title{font:600 30px/1.15 var(--serif);color:var(--ink);margin:6px 0 8px;padding:0;border:0}"
+        ".ss-head{margin-top:56px}"
+        ".ss-desc{font:400 17px/1.55 var(--serif);color:var(--ink);max-width:760px;margin:0 0 14px}"
+        ".ss-hint{font:500 16px/1.5 var(--sans);color:var(--ink);max-width:820px;margin:6px 0 14px}"
+        ".ss-hint b{display:block;font:600 13px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;"
+        "color:var(--tan);margin-bottom:4px}"
+        ".ss-brief{background:var(--tan-lt);padding:22px 28px 24px;font:400 16px/1.6 var(--sans);color:var(--ink)}"
+        ".ss-brief p{margin:0 0 12px}"
+        ".ss-brief code{background:#fff;padding:1px 5px}"
+        ".ss-note{margin:14px 0 0;background:var(--pink-lt);padding:12px 16px;font:400 15px/1.55 var(--sans);"
+        "color:var(--ink)}"
+        ".ss-note strong{color:var(--crimson)}"
+        ".ss-note.ok{background:var(--tan-lt)}.ss-note.ok strong{color:var(--ink)}"
+        ".ss-result{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--ink);"
+        "border-bottom:1px solid var(--ink);margin-top:20px}"
+        ".ss-result > div{padding:26px 32px 28px 0}"
+        ".ss-result > div + div{border-left:1px solid var(--rule);padding-left:32px}"
+        ".ss-big{font:500 52px/1 var(--serif);letter-spacing:-.01em;font-variant-numeric:tabular-nums lining-nums;"
+        "color:var(--ink);margin:12px 0 14px}"
+        ".ss-big span{background:linear-gradient(transparent 62%,var(--pink-lt) 62%)}"
+        ".ss-result p:not(.ss-lab):not(.ss-big){font:400 16px/1.55 var(--sans);color:var(--ink);margin:0 0 6px}"
+        ".ss-result .ss-meta{color:var(--tan)}"
+        "@media (max-width:700px){.ss-mast p:last-child{display:none}.ss-hero{grid-template-columns:1fr;row-gap:24px}"
+        ".ss-title{font-size:44px}.ss-stage-title{font-size:40px}.ss-prompt ul{grid-template-columns:1fr}"
+        ".ss-result{grid-template-columns:1fr}.ss-result > div + div{border-left:0;border-top:1px solid var(--rule);"
+        "padding-left:0}.ss-big{font-size:40px}}"
     )
     STAGES = ("Predict", "Observe", "Explain", "Evaluate")
     BRIEF_NAME = "Revenue Forecast Brief"
     EVAL_STYLE = (
-        "<style>.poee-eval .sum{background:var(--wash);border-top:2px solid var(--navy-dk);"
-        "border-bottom:1px solid var(--rule);padding:16px 22px;margin:14px 0}"
-        ".poee-eval .big{font:500 22px/1.3 var(--serif);color:var(--ink)}"
-        ".poee-eval .bar{display:flex;height:8px;overflow:hidden;margin:12px 0}"
-        ".poee-eval .legend,.poee-eval .chips{font:400 12.5px/1.6 var(--sans);color:var(--mid);margin-top:6px}"
-        ".poee-eval .chip{display:inline-block;background:#fff;border:1px solid var(--rule);padding:1px 8px;margin:2px;"
-        "color:var(--ink)}"
-        ".poee-eval .ev{background:#fff;border:1px solid var(--rule);border-top:3px solid #d97706;padding:16px 20px;margin:14px 0}"
-        ".poee-eval .ev.harm{border-top-color:#b91c1c}"
-        ".poee-eval .ev.reveal{border-top-color:#003594}"
+        "<style>.poee-eval .grp{font:600 13px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;"
+        "color:var(--crimson);margin:48px 0 14px}"
+        ".poee-eval .sum{position:relative;isolation:isolate;padding:0 12px 12px 0}"
+        ".poee-eval .sum::before,.poee-eval .verdict::before{content:'';position:absolute;left:12px;top:12px;right:0;"
+        "bottom:0;background:var(--dots);opacity:.55;z-index:-1}"
+        ".poee-eval .sum > div{background:#fff;border:1px solid var(--ink);padding:22px 28px}"
+        ".poee-eval .big{font:500 30px/1.2 var(--serif);color:var(--ink)}"
+        ".poee-eval .verdict{position:relative;isolation:isolate;padding:0 12px 12px 0;margin:0 0 22px}"
+        ".poee-eval .verdict-in{background:#fff;border:1px solid var(--ink)}"
+        ".poee-eval .verdict-top{display:flex;justify-content:space-between;align-items:center;gap:20px;"
+        "padding:16px 26px;border-bottom:1px solid var(--ink)}"
+        ".poee-eval .lab{font:600 13px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;"
+        "color:var(--tan);margin:0}"
+        ".poee-eval h4{font:600 24px/1.25 var(--serif);color:var(--ink);margin:4px 0 0}"
+        ".poee-eval .stamp{font:700 13px/1 var(--sans);letter-spacing:.08em;text-transform:uppercase;"
+        "color:var(--crimson);border:1.5px solid var(--crimson);padding:6px 10px;white-space:nowrap}"
+        ".poee-eval .rows{display:grid;grid-template-columns:repeat(3,1fr)}"
+        ".poee-eval .rows > div{padding:20px 26px 24px}"
+        ".poee-eval .rows > div + div{border-left:1px solid var(--rule)}"
+        ".poee-eval .rows p:not(.lab){font:400 16px/1.55 var(--serif);color:var(--ink);margin:10px 0 0}"
+        ".poee-eval .rows .sound{background:var(--tan-lt)}"
+        ".poee-eval .why{font:400 18px/1.5 var(--serif);color:var(--ink);margin:0 0 12px;max-width:800px}"
+        ".poee-eval table{width:100%;border-collapse:collapse}"
+        ".poee-eval th{font:600 13px/1.3 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--tan);"
+        "text-align:left;padding:10px 16px 10px 0;border-bottom:1px solid var(--ink)}"
+        ".poee-eval td{padding:14px 16px 14px 0;border-bottom:1px solid var(--rule);vertical-align:top;"
+        "font:400 16px/1.5 var(--serif);color:var(--ink)}"
+        ".poee-eval td.set{font:600 15px/1.4 var(--sans);width:24%}"
+        ".poee-eval td.num{font:500 22px/1.1 var(--serif);white-space:nowrap;text-align:right;width:9%;"
+        "font-variant-numeric:tabular-nums lining-nums}"
+        ".poee-eval td.barcell{width:22%;padding-top:20px}"
+        ".poee-eval .bar{height:12px;background:var(--pink)}"
+        ".poee-eval tr.base td{background:var(--tan-lt)}.poee-eval tr.base .bar{background:var(--ink)}"
+        ".poee-eval .legend{font:400 14px/1.5 var(--sans);color:var(--tan);margin:10px 0 0}"
+        ".poee-eval .rev{display:grid;grid-template-columns:260px 1fr;column-gap:40px;padding:22px 0;"
+        "border-bottom:1px solid var(--rule)}"
+        ".poee-eval .rev h3{font:600 20px/1.3 var(--serif);color:var(--ink);margin:0;padding:0;border:0}"
+        ".poee-eval .rev p{font:400 18px/1.55 var(--serif);color:var(--ink);margin:0}"
+        ".poee-eval .rev .fact{font:400 14px/1.5 var(--sans);color:var(--tan);margin-top:8px}"
         ".poee-eval .num{white-space:nowrap}"
-        ".poee-eval h3{font:500 19px/1.25 var(--serif);color:var(--ink);margin:0 0 12px;padding:0;border:0}"
-        ".poee-eval .trail{display:flex;gap:8px;margin-bottom:10px}"
-        ".poee-eval .trail div{flex:1;padding:8px 10px;font:400 13px/1.4 var(--sans);background:var(--wash)}"
-        ".poee-eval .trail .ok{background:#ecfdf5}"
-        ".poee-eval .k{display:block;font:600 10.5px/1.4 var(--sans);text-transform:uppercase;letter-spacing:.1em;"
-        "color:var(--mid)}"
-        ".poee-eval .also{font-size:11.5px;color:var(--mid)}"
-        ".poee-eval .key{display:inline-block;width:10px;height:10px;margin:0 6px -1px 0}"
-        ".poee-eval .why,.poee-eval .cost{font:400 14px/1.6 var(--sans);color:var(--ink);margin:8px 0}"
-        ".poee-eval .cost{background:#fdf3f2;padding:10px 12px}"
-        ".poee-eval .grp{margin:26px 0 4px;font:600 12px/1 var(--sans);text-transform:uppercase;letter-spacing:.14em;"
-        "color:var(--navy)}</style>"
+        "@media (max-width:700px){.poee-eval .rows,.poee-eval .rev{grid-template-columns:1fr}"
+        ".poee-eval .rows > div + div{border-left:0;border-top:1px solid var(--rule)}"
+        ".poee-eval td.barcell,.poee-eval th:nth-child(3){display:none}}</style>"
     )
 
     CARDS = {
@@ -702,24 +753,25 @@ def record_flip(set_flipped, set_opened, card_id: str, _value=None) -> None:
 @app.function
 def card_html(card_id: str) -> str:
     card = CARDS[card_id]
-    title = html.escape(card["title"], quote=False)
-    front = (
-        "<div class='ss-card ss-front-face'><div class='ss-band'>City of Pittsburgh</div>"
-        f"<div class='ss-front-body'><div class='ss-numeral'>{card['numeral']}</div>"
-        f"<div class='ss-front-title'>{title}</div><div class='ss-hair'></div></div>"
-        "<div class='ss-band-b'>Click to open</div></div>"
+    return (
+        f"<style>{PALETTE}{CARD_STYLE}</style><div class='ss ss-ex'><div class='ss-ex-card'>"
+        f"<span class='ss-ex-num'>{card['numeral']}</span>"
+        f"<div><div class='ss-ex-title'>{html.escape(card['title'], quote=False)}</div>"
+        f"<div class='ss-ex-short'>{html.escape(card['back'], quote=False)}</div></div>"
+        "<span class='ss-ex-cue'><span class='ss-cue-closed'>Read in full</span>"
+        "<span class='ss-cue-open'>Close</span><i></i></span>"
+        f"<div class='ss-ex-full'>{html.escape(card['full'], quote=False)}</div></div></div>"
     )
-    back = (
-        f"<div class='ss-card ss-back ss-back-face'><div class='ss-back-head'><b>{title}</b><i>{card['numeral']}</i></div>"
-        f"<div class='ss-back-text'>{html.escape(card['back'], quote=False)}</div></div>"
-    )
-    return f"<style>{PALETTE}{CARD_STYLE}</style><div class='ss' style='margin:0 -9px'>{front}{back}</div>"
 
 
 @app.function
-def card_slot_style(flipped: bool) -> dict:
-    # The face is chosen by custom properties, which inherit into the button's shadow root.
-    return {**CARD_SLOT, "--ss-front": "none" if flipped else "flex", "--ss-back": "none" if not flipped else "block"}
+def card_slot_style(opened: bool) -> dict:
+    # The open look is chosen by custom properties, which inherit into the button's shadow root.
+    if opened:
+        return {"width": "100%", "--ss-open": "1", "--ss-full": "block", "--ss-plus": "0px",
+                "--ss-cue-open": "inline", "--ss-cue-closed": "none"}
+    return {"width": "100%", "--ss-open": "0", "--ss-full": "none", "--ss-plus": "9px",
+            "--ss-cue-open": "none", "--ss-cue-closed": "inline"}
 
 
 @app.function
@@ -731,14 +783,13 @@ def bold_html(text: str) -> str:
 @app.function
 def stage_header_html(stage: int) -> str:
     steps = "".join(
-        f'<span class="ss-step now">{name}</span>' if i == stage else f'<span class="ss-step">{name}</span>'
+        f'<li class="{"now" if i == stage else "done" if i < stage else "next"}"><b>Stage {i}</b>{name}</li>'
         for i, name in enumerate(STAGES, 1)
     )
     return (
-        f'<div class="ss ss-stage"><div class="ss-runhead"><span>{BRIEF_NAME}</span>'
-        f"<span>Stage {stage} of 4</span></div>"
-        f'<h2 class="ss-stage-title"><em>Stage {stage}</em> · {STAGES[stage - 1]}</h2>'
-        f'<div class="ss-steps">{steps}</div></div>'
+        f'<div class="ss ss-stage"><div class="ss-stage-top"><p class="ss-lab cr">Stage {stage} of 4</p>'
+        f'<p class="ss-lab">{BRIEF_NAME}</p></div>'
+        f'<h2 class="ss-stage-title">{STAGES[stage - 1]}</h2><ol class="ss-progress">{steps}</ol></div>'
     )
 
 
@@ -755,10 +806,10 @@ def prediction_ready(method: str | None, why: str, accuracy: str) -> bool:
 @app.function
 def locked_prediction_html(prediction: dict) -> str:
     return (
-        '<div class="ss ss-locked"><div class="ss-locked-head">Your locked prediction</div>'
+        '<div class="ss ss-exhibit"><div class="ss-exhibit-in"><p class="ss-lab cr">Your locked prediction</p>'
         f"<h4>The method I would trust</h4><p>{html.escape(METHOD_LABELS.get(prediction['method'], prediction['method']))}</p>"
         f"<h4>Why</h4><p>{paragraph_html(prediction['why'])}</p>"
-        f"<h4>How accurate I expect the forecast to be</h4><p>{paragraph_html(prediction['accuracy'])}</p></div>"
+        f"<h4>How accurate I expect the forecast to be</h4><p>{paragraph_html(prediction['accuracy'])}</p></div></div>"
     )
 
 
@@ -784,6 +835,14 @@ def figure_html(figure) -> str:
 
 
 @app.function
+def table_ready(value):
+    """marimo 0.18 can't draw a pandas 3 table whose text index has no name (without pyarrow), so name it."""
+    if isinstance(value, (pd.DataFrame, pd.Series)) and value.index.nlevels == 1 and value.index.name is None:
+        return value.rename_axis("index")
+    return value
+
+
+@app.function
 def run_cell(code: str, data) -> dict:
     """Run a student's cell on a fresh copy of the data; return stdout, last value, error and any figure."""
     namespace = cell_namespace(data)
@@ -804,7 +863,7 @@ def run_cell(code: str, data) -> dict:
     return {
         "stdout": stdout.getvalue(),
         "value": None if value is None else repr(value),
-        "result": value,
+        "result": table_ready(value),
         "error": error,
         "figure": figure,
     }
@@ -896,11 +955,13 @@ def reveal_cards(cells: dict, runs: dict) -> list[dict]:
 @app.function
 def settings_card_html(card: dict) -> str:
     return (
-        f"<div class=\"ev\"><h3>{html.escape(card['title'])}</h3>"
-        f"<div class='trail'><div><span class='k'>You chose</span><b>{html.escape(card['chose'])}</b></div>"
-        f"<div class='ok'><span class='k'>A sound choice</span>{html.escape(card['sound'])}</div></div>"
-        f"<div class='why'><b>Why.</b> {html.escape(card['why'])}</div>"
-        f"<div class='cost'><b>What happens for the city.</b> {html.escape(card['cost'])}</div></div>"
+        "<div class='verdict'><div class='verdict-in'><div class='verdict-top'>"
+        f"<div><p class='lab'>{html.escape(card['title'])} · You chose</p><h4>{html.escape(card['chose'])}</h4></div>"
+        "<span class='stamp'>Worth a second look</span></div><div class='rows'>"
+        f"<div><p class='lab'>Why</p><p>{html.escape(card['why'])}</p></div>"
+        f"<div><p class='lab'>What happens for the city</p><p>{html.escape(card['cost'])}</p></div>"
+        f"<div class='sound'><p class='lab'>A sound choice</p><p>{html.escape(card['sound'])}</p></div>"
+        "</div></div></div>"
     )
 
 
@@ -908,39 +969,66 @@ def settings_card_html(card: dict) -> str:
 def reveal_card_html(card: dict) -> str:
     fact = "You changed the starter code." if card["edited"] else "You ran the starter code as given."
     return (
-        f"<div class=\"ev reveal\"><h3>{html.escape(card['title'])}</h3>"
-        f"<div class='why'>{html.escape(card['finding'])}</div>"
-        f"<div class='also'>{fact}</div></div>"
+        f"<div class='rev'><h3>{html.escape(card['title'])}</h3>"
+        f"<div><p>{html.escape(card['finding'])}</p><p class='fact'>{fact}</p></div></div>"
     )
 
 
 @app.function
 def fooled_table_html(data) -> str:
+    cases = fooled_rows(data)
+    largest = max(r["reported_rmse_m"] for r in cases)
     rows = "".join(
-        f"<tr><td>{html.escape(r['setting'])}</td><td class='num'>${r['reported_rmse_m']:.1f}M</td>"
+        f"<tr class='{'base' if i == 0 else ''}'><td class='set'>{html.escape(r['setting'])}</td>"
+        f"<td class='num'>${r['reported_rmse_m']:.1f}M</td>"
+        f"<td class='barcell'><div class='bar' style='width:{r['reported_rmse_m'] / largest * 100:.1f}%'></div></td>"
         f"<td>{html.escape(r['what_is_going_on'])}</td></tr>"
-        for r in fooled_rows(data)
+        for i, r in enumerate(cases)
     )
-    return ("<table class='ss-sheet'><tr><th>Setting</th><th>Reported error</th><th>What's really going on</th></tr>"
-            f"{rows}</table>")
+    return (
+        "<table><tr><th>Setting</th><th>Reported error</th><th></th><th>What's really going on</th></tr>"
+        f"{rows}</table><p class='legend'>Dark bar: a sensible model, tested on the latest quarters. "
+        "Pink bars: settings that score better for the wrong reason.</p>"
+    )
 
 
 @app.function
 def evaluation_html(data, settings: dict, cells: dict, runs: dict) -> str:
     cards = settings_cards(settings["column"], settings["lag"], settings["remove_missing"], settings["training_share"])
     part1 = "".join(settings_card_html(c) for c in cards) or (
-        "<div class='sum'><div class='big'>Every setting holds up.</div></div>"
+        "<div class='sum'><div><div class='big'>Every setting holds up.</div></div></div>"
     )
     part3 = "".join(reveal_card_html(c) for c in reveal_cards(cells, runs))
     return (
         f"<style>{PALETTE}</style>{EVAL_STYLE}<div class='ss poee-eval'>"
         f"<div class='grp'>Part 1 · Your forecast settings</div>{part1}"
         "<div class='grp'>Part 2 · The number that fooled you</div>"
-        "<div class='sum'><div class='why'>A lower error is not proof of a better forecast. These settings all "
-        "\"score\" well for the wrong reasons:</div>"
-        f"{fooled_table_html(data)}</div>"
+        "<p class='why'>A lower error is not proof of a better forecast. These settings all "
+        "\"score\" well for the wrong reasons:</p>"
+        f"{fooled_table_html(data)}"
         f"<div class='grp'>Part 3 · What the data was hiding</div>{part3}</div>"
     )
+
+
+@app.function
+def forecast_result_html(score: dict, forecast: dict | None, unavailable: str) -> str:
+    share = score["rmse"] / score["test_mean"] * 100
+    left = (
+        "<div><p class='ss-lab'>Error (RMSE)</p>"
+        f"<p class='ss-big'>${score['rmse']:,.0f}</p>"
+        f"<p>On average, the predictions for the test quarters are off by ${score['rmse']:,.0f}.</p>"
+        f"<p>The average actual revenue in those quarters is ${score['test_mean']:,.0f}, so the error is "
+        f"{share:.1f}% of it.</p>"
+        f"<p>The test quarters range from ${score['test_min']:,.0f} to ${score['test_max']:,.0f}.</p>"
+        f"<p class='ss-meta'>Trained on {score['train_rows']} quarters and tested on {score['test_rows']}.</p></div>"
+    )
+    right = (
+        f"<div><p class='ss-lab cr'>Forecast for {forecast['label']}</p>"
+        f"<p class='ss-big'><span>${forecast['value']:,.0f}</span></p><p><i>{html.escape(forecast['reason'])}</i></p></div>"
+        if forecast
+        else f"<div><p class='ss-lab cr'>No forecast possible</p><p>{html.escape(unavailable)}</p></div>"
+    )
+    return f"<div class='ss ss-result'>{left}{right}</div>"
 
 
 @app.function
@@ -969,9 +1057,14 @@ def report_html(data, prediction: dict, settings: dict, explain: dict, helper_lo
               f"{'removed' if settings['remove_missing'] else 'kept'} · {settings['training_share']:.0%} training")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Revenue Forecast Brief</title>
-<style>body {{ font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }}
-th, td {{ padding: 4px 8px; vertical-align: top; border-bottom: 1px solid #ddd; text-align: left; }}</style></head><body>
-<h1>Revenue Forecast Brief</h1>
+{FONT_LINK}<style>{PALETTE}{BRIEF_STYLE}
+body {{ margin: 0; background: #fff; }}
+.ss-doc {{ max-width: 1000px; margin: 48px auto; padding: 0 24px; }}
+.ss-doc > h2 {{ font: 500 30px/1.2 var(--serif); border-top: 4px solid var(--ink); padding-top: 14px; margin: 48px 0 12px; }}
+.ss-doc > h3 {{ font: 600 18px/1.35 var(--serif); margin: 20px 0 6px; }}
+.ss-doc > p, .ss-doc > ul {{ font: 400 16px/1.6 var(--sans); }}</style></head><body><div class="ss ss-doc">
+<p class="ss-kicker">ConCReTE · City of Pittsburgh</p>
+<h1 class="ss-title">Revenue Forecast Brief</h1>
 <p><b>Scenario:</b> City of Pittsburgh quarterly revenue forecast</p>
 <h2>Prediction (locked before seeing the data)</h2>
 {locked_prediction_html(prediction)}
@@ -983,7 +1076,7 @@ th, td {{ padding: 4px 8px; vertical-align: top; border-bottom: 1px solid #ddd; 
 <ul>{questions}</ul>
 <h2>Evaluation</h2>
 {evaluation_html(data, settings, cells, runs)}
-</body></html>"""
+</div></body></html>"""
 
 
 @app.cell(hide_code=True)
@@ -991,9 +1084,13 @@ def _():
     import marimo as mo
 
     mo.Html(
-        f"{FONT_LINK}<style>{PALETTE}{BRIEF_STYLE}</style>"
-        "<div class='ss'><div class='ss-kicker'>ConCReTE · City of Pittsburgh</div>"
+        f"{FONT_LINK}<style>{PALETTE}{BRIEF_STYLE}</style><div class='ss'>"
+        f"<div class='ss-mast'><p class='ss-lab'>{BRIEF_NAME}</p><p class='ss-lab'>{' → '.join(STAGES)}</p></div>"
+        "<div class='ss-hero'><div><p class='ss-kicker'>ConCReTE · City of Pittsburgh</p>"
         "<h1 class='ss-title'>Forecasting the city's revenue</h1></div>"
+        "<div><p class='ss-byline'><b>Quarterly revenue, 2012–2024</b><br>One table, extracted six ways:</p>"
+        "<ul class='ss-sources'><li>By hand</li><li>Docling</li><li>ChatGPT</li><li>Claude chat</li>"
+        "<li>Claude API</li><li>pypdf</li></ul></div></div></div>"
     )
     return (mo,)
 
@@ -1035,7 +1132,8 @@ def connect_panel(get_model_status, mo, model_url, test_button):
         "error": mo.Html(f"<div class='ss ss-note'><strong>Not connected.</strong> {html.escape(_detail)}</div>"),
     }.get(_state, "")
     mo.vstack([
-        mo.Html("<h3 class='ss ss-task-title'>Before you start: connect your AI model</h3>"),
+        mo.Html("<div class='ss'><p class='ss-lab cr'>Before you start</p>"
+                "<h3 class='ss-task-title'>Connect your AI model</h3></div>"),
         mo.Html(f"<div class='ss ss-brief'>{mo.md(CRCD_STEPS).text}</div>"),
         model_url,
         test_button,
@@ -1082,7 +1180,7 @@ def flip_cards(deliver_card, get_flipped, get_opened, mo, role_card, story_card)
         for card_id, card in (("story", story_card), ("role", role_card), ("deliver", deliver_card))
     ]
     _gate = "" if cards_ready(get_opened()) else mo.Html("<p class='ss ss-gate'>Open all three cards to begin.</p>")
-    mo.vstack([mo.hstack(_slots, justify="space-between", wrap=True, gap=1), _gate])
+    mo.vstack([*_slots, _gate], gap=0.75)
     return
 
 
@@ -1141,17 +1239,6 @@ def predict(get_opened, get_prediction, lock_button, lock_warning, method_choice
     else:
         _output = mo.vstack(_header + [mo.Html(locked_prediction_html(get_prediction()))])
     _output
-    return
-
-
-@app.cell(hide_code=True)
-def briefing(get_prediction, mo):
-    mo.stop(get_prediction() is None)
-    mo.accordion({
-        "Read the full briefing": mo.md(
-            "\n\n".join(f"### {card['title']}\n\n{card['full']}" for card in CARDS.values())
-        )
-    })
     return
 
 
@@ -1244,10 +1331,10 @@ def observe_intro(get_prediction, mo, pgh_revenue_data):
 def helper_panel(get_prediction, helper, mo):
     mo.stop(get_prediction() is None)
     mo.vstack([
-        mo.Html("<h3 class='ss ss-task-title'>Ask the AI helper</h3>"
-                "<div class='ss ss-prompt'>Your model on CRCD can see the data, your code in the five cells below, "
+        mo.Html("<div class='ss ss-head'><p class='ss-lab'>Assistant</p><h3 class='ss-task-title'>Ask the AI helper</h3>"
+                "<p class='ss-desc'>Your model on CRCD can see the data, your code in the five cells below, "
                 "and your current settings. Ask it to explain code, errors or ideas. It won't make your choices for "
-                "you.</div>"),
+                "you.</p></div>"),
         helper,
     ])
     return
@@ -1257,7 +1344,7 @@ def helper_panel(get_prediction, helper, mo):
 def observe_cells(cell_editors, cell_run_buttons, get_cells, get_outputs, get_prediction, get_submitted, mo):
     mo.stop(get_prediction() is None)
     _panels = []
-    for _key, _cell in STARTER_CELLS.items():
+    for _number, (_key, _cell) in enumerate(STARTER_CELLS.items(), 1):
         _result = get_outputs()[_key]
         _shown = [mo.md("*Not run yet.*")]
         if _result is not None:
@@ -1273,12 +1360,13 @@ def observe_cells(cell_editors, cell_run_buttons, get_cells, get_outputs, get_pr
             if not _shown:
                 _shown = [mo.md("*Ran with no output.*")]
         _panels.append(mo.vstack([
-            mo.Html(f"<h3 class='ss ss-task-title'>{html.escape(_cell['title'])}</h3>"
-                    f"<div class='ss ss-note'>{html.escape(_cell['question'])}</div>"),
+            mo.Html(f"<div class='ss ss-head'><p class='ss-lab ss-swy'>Show your work · cell {_number} of "
+                    f"{len(STARTER_CELLS)}</p><h3 class='ss-task-title'>{html.escape(_cell['title'])}</h3>"
+                    f"<div class='ss-hint'><b>Where to look</b>{html.escape(_cell['question'])}</div></div>"),
             *([mo.md(f"```python\n{get_cells()[_key]}\n```")] if get_submitted() else [cell_editors[_key], cell_run_buttons[_key]]),
             *_shown,
         ]))
-    mo.vstack(_panels, gap=1.5)
+    mo.vstack(_panels, gap=0.5)
     return
 
 
@@ -1310,25 +1398,15 @@ def forecast_model(
         try:
             _score = score_model(_frame, training_share.value)
             _forecast = next_quarter_forecast(pgh_revenue_data, column_choice.value, lag_amount.value)
-            _forecast_text = (
-                f"**Forecast for {_forecast['label']}:** ${_forecast['value']:,.0f}  \n*{_forecast['reason']}*"
-                if _forecast
-                else f"**No forecast possible.** {forecast_unavailable_reason(pgh_revenue_data, column_choice.value, lag_amount.value)}"
+            _unavailable = "" if _forecast else forecast_unavailable_reason(
+                pgh_revenue_data, column_choice.value, lag_amount.value
             )
-            _result = mo.md("\n".join([
-                f"**Error (RMSE): ${_score['rmse']:,.0f}**, trained on {_score['train_rows']} quarters and tested on {_score['test_rows']}.",
-                "",
-                f"- On average, the predictions for the test quarters are off by ${_score['rmse']:,.0f}.",
-                f"- The average actual revenue in those quarters is ${_score['test_mean']:,.0f}, so the error is "
-                f"{_score['rmse'] / _score['test_mean'] * 100:.1f}% of it.",
-                f"- The test quarters range from ${_score['test_min']:,.0f} to ${_score['test_max']:,.0f}.",
-                "",
-                _forecast_text,
-            ]))
+            _result = mo.Html(forecast_result_html(_score, _forecast, _unavailable))
         except ValueError as _error:
             _result = mo.Html(f"<div class='ss ss-note'>{html.escape(str(_error))}</div>")
     mo.vstack([
-        mo.Html("<h3 class='ss ss-task-title'>Build your forecast</h3>"),
+        mo.Html("<div class='ss ss-head'><p class='ss-lab'>Your forecast</p>"
+                "<h3 class='ss-task-title'>Build your forecast</h3></div>"),
         mo.Html("<div class='ss ss-prompt'>Choose which column to trust, how far back the model looks (the lag), "
                 "whether to drop rows with missing values, and how much of the history to train on. The model "
                 "trains on the earliest quarters and is tested on the latest ones.</div>"),
@@ -1504,7 +1582,8 @@ def evaluate(
 def download_brief(final_settings, get_cells, get_explain, get_prediction, get_runs, helper_log, mo, pgh_revenue_data):
     _doc = report_html(pgh_revenue_data, get_prediction(), final_settings, get_explain(), helper_log, get_cells(), get_runs())
     mo.vstack([
-        mo.Html("<h3 class='ss ss-task-title'>Download your brief</h3>"),
+        mo.Html("<div class='ss ss-head'><p class='ss-lab'>Take it with you</p>"
+                "<h3 class='ss-task-title'>Download your brief</h3></div>"),
         mo.md("The file holds your prediction, your forecast, your reflection, your questions to the helper and "
               "this evaluation. It opens in any browser; use **Print → Save as PDF** for a PDF."),
         mo.download(data=_doc.encode("utf-8"), filename="revenue-forecast-brief.html", mimetype="text/html",
