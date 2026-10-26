@@ -317,6 +317,12 @@ with app.setup:
         You can see the data, their current code in each exploration cell with its last output, and their current settings below.
     """)
 
+    EXPLAIN_PROMPTS = [
+        "Which method did you end up trusting, and what changed or confirmed your view since you made your prediction?",
+        "What are your thoughts on using data extracted by AI? Did it affect the quality of your model?",
+        "Write a short note to Chris: your forecast, how confident he should be in it, and why.",
+    ]
+
     class ModelUnavailable(Exception):
         """The student's model server could not be reached or gave an unusable reply."""
 
@@ -671,6 +677,11 @@ def run_and_record(editor, data, set_outputs, set_runs, key: str, _value=None) -
     set_runs(lambda runs: with_entry(runs, key, runs.get(key, 0) + 1))
 
 
+@app.function
+def can_submit(fields: dict) -> bool:
+    return all(fields.get(f"r{i}", "").strip() for i in range(1, len(EXPLAIN_PROMPTS) + 1))
+
+
 @app.cell(hide_code=True)
 def _():
     import marimo as mo
@@ -859,6 +870,7 @@ def observe_states(mo):
     get_cells, set_cells = mo.state({key: cell["code"] for key, cell in STARTER_CELLS.items()})
     get_runs, set_runs = mo.state({key: 0 for key in STARTER_CELLS})
     get_outputs, set_outputs = mo.state({key: None for key in STARTER_CELLS})
+    get_submitted, set_submitted = mo.state(False)
     # Plain containers, read when needed: the helper chat must never be recreated (that wipes its history).
     helper_context = {"base": "", "csv": "", "cells": {}, "settings": {}}
     helper_log = []
@@ -866,11 +878,13 @@ def observe_states(mo):
         get_cells,
         get_outputs,
         get_runs,
+        get_submitted,
         helper_context,
         helper_log,
         set_cells,
         set_outputs,
         set_runs,
+        set_submitted,
     )
 
 
@@ -923,7 +937,7 @@ def observe_intro(get_prediction, mo, pgh_revenue_data):
 
 
 @app.cell(hide_code=True)
-def observe_cells(cell_editors, cell_run_buttons, get_outputs, get_prediction, mo):
+def observe_cells(cell_editors, cell_run_buttons, get_cells, get_outputs, get_prediction, get_submitted, mo):
     mo.stop(get_prediction() is None)
     _panels = []
     for _key, _cell in STARTER_CELLS.items():
@@ -944,8 +958,7 @@ def observe_cells(cell_editors, cell_run_buttons, get_outputs, get_prediction, m
         _panels.append(mo.vstack([
             mo.Html(f"<h3 class='ss ss-task-title'>{html.escape(_cell['title'])}</h3>"
                     f"<div class='ss ss-note'>{html.escape(_cell['question'])}</div>"),
-            cell_editors[_key],
-            cell_run_buttons[_key],
+            *([mo.md(f"```python\n{get_cells()[_key]}\n```")] if get_submitted() else [cell_editors[_key], cell_run_buttons[_key]]),
             *_shown,
         ]))
     mo.vstack(_panels, gap=1.5)
@@ -953,9 +966,26 @@ def observe_cells(cell_editors, cell_run_buttons, get_outputs, get_prediction, m
 
 
 @app.cell(hide_code=True)
-def forecast_model(column_choice, get_prediction, lag_amount, mo, pgh_revenue_data, remove_missing, training_share):
+def forecast_model(
+    column_choice,
+    get_prediction,
+    get_submitted,
+    lag_amount,
+    mo,
+    pgh_revenue_data,
+    remove_missing,
+    training_share,
+):
     mo.stop(get_prediction() is None)
-    _controls = mo.vstack([column_choice, lag_amount, remove_missing, training_share])
+    _controls = (
+        mo.md(
+            f"**Your settings (locked):** {METHOD_LABELS.get(column_choice.value, 'no column chosen')} · lag "
+            f"{lag_amount.value} · missing values {'removed' if remove_missing.value else 'kept'} · "
+            f"{training_share.value:.0%} training"
+        )
+        if get_submitted()
+        else mo.vstack([column_choice, lag_amount, remove_missing, training_share])
+    )
     if column_choice.value is None:
         _result = mo.Html("<div class='ss ss-note'>Choose a revenue column to build the model.</div>")
     else:
@@ -1058,6 +1088,81 @@ def observe_gate(get_prediction, get_runs, mo):
         if _waiting
         else mo.Html("<p class='ss ss-gate'>You've run every cell. Stage 3 is below.</p>")
     )
+    return
+
+
+@app.cell
+def explain_inputs(mo):
+    get_explain, set_explain = mo.state({"r1": "", "r2": "", "r3": ""})
+    submit_button = mo.ui.run_button(label="Submit for evaluation", kind="success")
+    return get_explain, set_explain, submit_button
+
+
+@app.cell
+def explain_fields(mo, set_explain):
+    # Plain dict: the explain cell must not re-run while the learner types.
+    explain_fields = {
+        f"r{i}": mo.ui.text_area(rows=5, full_width=True, on_change=functools.partial(record_field, set_explain, f"r{i}"))
+        for i in range(1, len(EXPLAIN_PROMPTS) + 1)
+    }
+    return (explain_fields,)
+
+
+@app.cell
+def submit_action(get_explain, mo, set_submitted, submit_button):
+    _ready = can_submit(get_explain())
+    if submit_button.value and _ready:
+        set_submitted(True)
+    submit_warning = (
+        mo.Html("<div class='ss ss-note'>Answer all three questions before you submit.</div>")
+        if submit_button.value and not _ready
+        else ""
+    )
+    return (submit_warning,)
+
+
+@app.cell(hide_code=True)
+def explain(
+    explain_fields,
+    get_explain,
+    get_prediction,
+    get_runs,
+    get_submitted,
+    mo,
+    submit_button,
+    submit_warning,
+):
+    mo.stop(not explain_unlocked(get_prediction(), get_runs()))
+    _header = [
+        mo.Html(stage_header_html(3)),
+        mo.Html("<div class='ss ss-prompt'>Look back at what you predicted before you saw the data, and at what you "
+                "found. Write for yourself and for Chris. Nobody will grade the wording, only whether your "
+                "reasoning holds up.</div>"),
+        mo.Html(locked_prediction_html(get_prediction())),
+    ]
+    if get_submitted():
+        _answers = "".join(
+            f"<div class='ss-label'><i>{i}</i><span>{html.escape(q)}</span></div>"
+            f"<div class='ss-indent'>{paragraph_html(get_explain()[f'r{i}'])}</div>"
+            for i, q in enumerate(EXPLAIN_PROMPTS, 1)
+        )
+        _output = mo.vstack(_header + [
+            mo.Html(f"<div class='ss'>{_answers}</div>"),
+            mo.Html("<div class='ss ss-note ok'><strong>Submitted.</strong> Your choices and answers are locked.</div>"),
+        ])
+    else:
+        _questions = "".join(
+            f"<div class='ss-label'><i>{i}</i><span>{html.escape(q)}</span></div>"
+            f"<div class='ss-indent'>{explain_fields[f'r{i}']}</div>"
+            for i, q in enumerate(EXPLAIN_PROMPTS, 1)
+        )
+        _output = mo.vstack(_header + [
+            mo.Html(f"<div class='ss'>{_questions}</div>"),
+            mo.md("Submitting locks your code cells, your forecast settings and these answers, then shows your evaluation."),
+            submit_button,
+            submit_warning,
+        ])
+    _output
     return
 
 
