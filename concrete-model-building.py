@@ -6,6 +6,7 @@ app = marimo.App(width="compact", app_title="ConCReTE Model Building")
 with app.setup:
     import ast
     import base64
+    import codecs
     import asyncio
     import contextlib
     import io
@@ -560,6 +561,17 @@ def urllib_request(url: str, payload: dict | None) -> dict:
 
 
 @app.function
+def model_unavailable(error: Exception) -> ModelUnavailable:
+    if isinstance(error, urllib.error.HTTPError):
+        return ModelUnavailable(f"Your model server answered with an error (HTTP {error.code}).")
+    return ModelUnavailable(
+        f"Couldn't reach your model ({type(error).__name__}). Look at your tunnel window (Terminal B): if it "
+        "says open failed, the node name or port in the tunnel command is wrong, so copy it again from step 3. "
+        "Otherwise check that Terminal B is still open and that llamacpp-status shows READY."
+    )
+
+
+@app.function
 async def model_request(url: str, payload: dict | None = None) -> dict:
     """GET (no payload) or POST JSON to the student's model server: browser fetch in WASM, urllib locally."""
     try:
@@ -575,14 +587,8 @@ async def model_request(url: str, payload: dict | None = None) -> dict:
         return await asyncio.to_thread(urllib_request, url, payload)
     except ModelUnavailable:
         raise
-    except urllib.error.HTTPError as error:
-        raise ModelUnavailable(f"Your model server answered with an error (HTTP {error.code}).") from error
     except Exception as error:
-        raise ModelUnavailable(
-            f"Couldn't reach your model ({type(error).__name__}). Look at your tunnel window (Terminal B): if it "
-            "says open failed, the node name or port in the tunnel command is wrong, so copy it again from step 3. "
-            "Otherwise check that Terminal B is still open and that llamacpp-status shows READY."
-        ) from error
+        raise model_unavailable(error) from error
 
 
 @app.function
@@ -595,12 +601,71 @@ async def list_model_name(base: str) -> str:
 
 
 @app.function
-async def ask_model(base: str, messages: list[dict]) -> str:
-    body = await model_request(f"{base}/v1/chat/completions", {"messages": messages, "temperature": 0.3})
+def sse_text(line: str) -> str:
+    """The text one streamed chunk adds; empty for keep-alives, role-only chunks and [DONE]."""
+    data = line.strip()[len("data:"):].strip() if line.strip().startswith("data:") else ""
+    if not data or data == "[DONE]":
+        return ""
+    choices = json.loads(data).get("choices") or [{}]
+    return choices[0].get("delta", {}).get("content") or ""
+
+
+@app.function
+def urllib_open_stream(url: str, payload: dict):
+    request = urllib.request.Request(
+        url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST"
+    )
+    return urllib.request.urlopen(request, timeout=60)
+
+
+@app.function
+async def browser_stream_lines(url: str, payload: dict):
+    from pyodide.http import pyfetch
+
+    response = await pyfetch(
+        url, method="POST", headers={"Content-Type": "application/json"}, body=json.dumps(payload)
+    )
+    if not response.ok:
+        raise ModelUnavailable(f"Your model server answered with an error (HTTP {response.status}).")
+    reader = response.js_response.body.getReader()
+    decoder = codecs.getincrementaldecoder("utf-8")()
+    pending = ""
+    while True:
+        chunk = await reader.read()
+        if chunk.done:
+            break
+        pending += decoder.decode(chunk.value.to_bytes())
+        *lines, pending = pending.split("\n")
+        for line in lines:
+            yield line
+    yield pending
+
+
+@app.function
+async def local_stream_lines(url: str, payload: dict):
+    response = await asyncio.to_thread(urllib_open_stream, url, payload)
+    with response:
+        while line := await asyncio.to_thread(response.readline):
+            yield line.decode("utf-8", errors="replace")
+
+
+@app.function
+async def stream_model(base: str, messages: list[dict]):
+    """Yield the reply so far, each time the model adds to it."""
+    url = f"{base}/v1/chat/completions"
+    payload = {"messages": messages, "temperature": 0.3, "stream": True}
+    lines = browser_stream_lines(url, payload) if in_browser() else local_stream_lines(url, payload)
+    reply = ""
     try:
-        return body["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError) as error:
-        raise ModelUnavailable("The model answered in an unexpected format.") from error
+        async for line in lines:
+            piece = sse_text(line)
+            if piece:
+                reply += piece
+                yield reply
+    except ModelUnavailable:
+        raise
+    except Exception as error:
+        raise model_unavailable(error) from error
 
 
 @app.function
@@ -1176,6 +1241,19 @@ def observe_intro(get_prediction, mo, pgh_revenue_data):
 
 
 @app.cell(hide_code=True)
+def helper_panel(get_prediction, helper, mo):
+    mo.stop(get_prediction() is None)
+    mo.vstack([
+        mo.Html("<h3 class='ss ss-task-title'>Ask the AI helper</h3>"
+                "<div class='ss ss-prompt'>Your model on CRCD can see the data, your code in the five cells below, "
+                "and your current settings. Ask it to explain code, errors or ideas. It won't make your choices for "
+                "you.</div>"),
+        helper,
+    ])
+    return
+
+
+@app.cell(hide_code=True)
 def observe_cells(cell_editors, cell_run_buttons, get_cells, get_outputs, get_prediction, get_submitted, mo):
     mo.stop(get_prediction() is None)
     _panels = []
@@ -1289,32 +1367,22 @@ def helper_chat(helper_context, helper_log, mo):
     async def helper_reply(messages, config):
         helper_log.append(messages[-1].content)
         if not helper_context["base"]:
-            return "Connect your model at the top of the page (**Test connection**) to use the helper."
+            yield "Connect your model at the top of the page (**Test connection**) to use the helper."
+            return
         system = helper_system_prompt(helper_context["csv"], helper_context["cells"], helper_context["settings"])
         history = helper_history(system, [{"role": m.role, "content": m.content} for m in messages])
+        reply = ""
         try:
-            return await ask_model(helper_context["base"], history)
+            async for reply in stream_model(helper_context["base"], history):
+                yield reply
         except ModelUnavailable as error:
-            return f"I can't reach your model right now. {error}"
+            yield f"{reply}\n\n*I can't reach your model right now. {error}*".strip()
 
     helper = mo.ui.chat(
         helper_reply,
         prompts=["What does a lag of 4 mean?", "How do I compare two columns row by row?", "What does this error mean?"],
     )
     return (helper,)
-
-
-@app.cell(hide_code=True)
-def helper_panel(get_prediction, helper, mo):
-    mo.stop(get_prediction() is None)
-    mo.vstack([
-        mo.Html("<h3 class='ss ss-task-title'>Ask the AI helper</h3>"
-                "<div class='ss ss-prompt'>Your model on CRCD can see the data, your code in the five cells, and "
-                "your current settings. Ask it to explain code, errors or ideas. It won't make your choices for "
-                "you.</div>"),
-        helper,
-    ])
-    return
 
 
 @app.cell(hide_code=True)
