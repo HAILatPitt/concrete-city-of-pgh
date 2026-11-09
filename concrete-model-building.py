@@ -826,10 +826,32 @@ def figure_html(figure) -> str:
 
 @app.function
 def table_ready(value):
-    """marimo 0.18 can't draw a pandas 3 table whose text index has no name (without pyarrow), so name it."""
+    """marimo can't draw a pandas 3 table whose text index has no name (without pyarrow), so name it."""
     if isinstance(value, (pd.DataFrame, pd.Series)) and value.index.nlevels == 1 and value.index.name is None:
         return value.rename_axis("index")
     return value
+
+
+@app.function
+def number_text(value) -> str:
+    """A float as marimo 0.18 showed it: grouped, at most three decimals, no trailing zeros."""
+    if pd.isna(value):
+        return ""
+    return f"{value:,.3f}".rstrip("0").rstrip(".")
+
+
+@app.function
+def float_formats(frame) -> dict:
+    return {name: number_text for name in frame.columns if pd.api.types.is_float_dtype(frame[name])}
+
+
+@app.function
+def display_table(value):
+    """marimo 0.25 pads every float to its longest decimal (13,559.000000000000), so floats keep the old format."""
+    import marimo as mo
+
+    frame = value.to_frame() if isinstance(value, pd.Series) else value
+    return mo.ui.table(frame, format_mapping=float_formats(frame), page_size=10, selection=None)
 
 
 @app.function
@@ -1341,7 +1363,7 @@ def observe_cells(cell_editors, cell_run_buttons, get_cells, get_outputs, get_pr
             if _result["stdout"]:
                 _shown.append(mo.md(f"```\n{_result['stdout']}\n```"))
             if _result["result"] is not None:
-                _shown.append(_result["result"] if isinstance(_result["result"], (pd.DataFrame, pd.Series)) else mo.md(f"```\n{_result['value']}\n```"))
+                _shown.append(display_table(_result["result"]) if isinstance(_result["result"], (pd.DataFrame, pd.Series)) else mo.md(f"```\n{_result['value']}\n```"))
             if _result["figure"] is not None:
                 _shown.append(mo.Html(_result["figure"]))
             if _result["error"]:
