@@ -3,3 +3,5 @@ __pycache__/
 .DS_Store
 uv.lock
 __marimo__/session/
+# marimo's export copies its own AI-assistant prompt; the page doesn't use it
+docs/CLAUDE.md
